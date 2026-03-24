@@ -19,17 +19,29 @@ The prototype introduces four core classes to the Tileworld framework to drive t
 
 ## 3. Individual Agent Implementation
 
-### Implementing the Agent
+### Implementation Overview
 
 Creating a new agent strategy involves extending `TWBaseAgent` and implementing the [`executeWorkerLogic()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L1019-L1024) method. This method acts as a sandbox that is only executed if all higher-priority survival and reflex tasks are satisfied by the base class.
 
 To prevent individual implementations from accidentally corrupting the shared memory or improperly claiming targets, the `consensusMemory` variable is [strictly encapsulated](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L57-L58). Implementations must use safe, delegated pipelines to interact with the environment state.
 
-For example, when building out an agent like `PrototypeAgent.java`, you should utilize:
-* [`getFuelStationFromConsensusMemory()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L682-L688) to evaluate opportunistic refueling if passing by the station.
-* [`getLowerPriorityTilesFromConsensusMemory()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L350-L363) and [`getLowerPriorityHolesFromConsensusMemory()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L365-L378) to retrieve pre-filtered lists of valid targets that the agent is permitted to consider.
-* [`isBestCandidate()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L761-L862) to mathematically verify that the agent has the highest utility claim to a target compared to all other peers before committing to a path.
-* [`shouldYieldMove()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L864-L890) to proactively check if stepping into a specific coordinate would physically block or interfere with a higher-priority teammate (resolved via lexicographical name comparison, e.g., "Agent1" overrides "Agent2").
+Individual agent implementations are added to the following files.
+* [TWAgent1.java](Tileworld/src/tileworld/agent/TWAgent1.java)
+* [TWAgent2.java](Tileworld/src/tileworld/agent/TWAgent2.java)
+* [TWAgent3.java](Tileworld/src/tileworld/agent/TWAgent3.java)
+* [TWAgent4.java](Tileworld/src/tileworld/agent/TWAgent4.java)
+* [TWAgent5.java](Tileworld/src/tileworld/agent/TWAgent5.java)
+* [TWAgent6.java](Tileworld/src/tileworld/agent/TWAgent6.java)
+
+### Implementation Requirements & Tips
+
+#### Requirements
+* Before implicitly claiming a target, [`isBestCandidate()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L761-L862) should be used to mathematically verify that the agent has the highest utility claim to a target compared to all other peers before committing to a path.
+* Before moving into a grid cell, [`shouldYieldMove()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L864-L890) should be used to proactively check if stepping into that specific coordinate would physically block or interfere with a higher-priority teammate (resolved via lexicographical name comparison, e.g., "Agent1" overrides "Agent2").
+
+#### Tips
+* [`getFuelStationFromConsensusMemory()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L682-L688) can be used to evaluate opportunistic refueling if passing by the station.
+* [`getLowerPriorityTilesFromConsensusMemory()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L350-L363) and [`getLowerPriorityHolesFromConsensusMemory()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L365-L378) can be used to retrieve pre-filtered lists of valid targets that the agent is permitted to consider.
 
 ## 4. Strategy Details
 The implicit coordination strategy relies on several sophisticated underlying mechanics to maximize efficiency and minimize wasted fuel.
