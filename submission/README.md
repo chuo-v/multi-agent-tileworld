@@ -109,8 +109,8 @@ The table below outlines the average rewards achieved across 2 runs (of 10 full-
 
 | Configuration File | Map Size | Object Spawns/Step | Object Lifetime | Run 1 Reward | Run 2 Reward | Average Reward |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| [`Parameters.java`](Tileworld/src/tileworld/Parameters.java) | 50x50 | 0.2 (Low) | 100 (High) | TBC | TBC | TBC |
-| [`Parameters2.java`](Tileworld/src/tileworld/Parameters2.java) | 80x80 | 2.0 (High) | 30 (Low) | TBC | TBC | TBC |
+| [`Parameters.java`](Tileworld/src/tileworld/Parameters.java) | 50x50 | 0.2 (Low) | 100 (High) | 633.2 | 614.8 | 624.0 |
+| [`Parameters2.java`](Tileworld/src/tileworld/Parameters2.java) | 80x80 | 2.0 (High) | 30 (Low) | 916.2 | 906.0 | 911.1 |
 
 ## 7. Notes & Setup
 
