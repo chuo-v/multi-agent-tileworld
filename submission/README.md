@@ -12,8 +12,6 @@ The prototype introduces four core classes to the Tileworld framework to drive t
   The abstract core of the agent team. It enforces a strict priority hierarchy for every tick and handles the standardized communication protocol and object utility scoring.
 * [**`ConsensusMemory.java`**](Tileworld/src/tileworld/agent/ConsensusMemory.java)
   An advanced memory module that bridges an agent's private sensor data with the team's shared global state. It handles broadcast parsing, dynamic map zoning (Phase 1 vs. Phase 2 exploration), BFS-based exploration targeting, and "garbage collecting" expired objects.
-* [**`PrototypeAgent.java`**](Tileworld/src/tileworld/agent/PrototypeAgent.java)
-  A concrete implementation extending `TWBaseAgent`. It serves as the template for individual agent behaviors. It defines specific threshold constants (like `OPPORTUNISTIC_FUEL_THRESHOLD`) and handles lower-priority target hunting that falls outside the base agent's automatic reflex radius.
 * [**`ConsensusPathGenerator.java`**](Tileworld/src/tileworld/planners/ConsensusPathGenerator.java)
   A customized A* pathfinder. Instead of using an agent's isolated local memory, this planner plots routes strictly using the `ConsensusMemory` map. This ensures all agents calculate distances and route around obstacles using the exact same global data snapshot.
 
@@ -53,7 +51,7 @@ Every agent's brain operates on a rigid, standardized priority queue to ensure c
 3. **Fuel Safety Check:** If the agent's fuel drops below its dynamic, A*-distance-based safety threshold, it immediately routes to the fuel station ([`getFuelSafetyThreshold()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L690-L696)).
 4. **First Responder / Monitoring:** If the exact object lifetime is currently unknown, an agent with sufficient fuel volunteers to monitor a newly spawned object to lock in the true lifetime ([`checkMonitoringTasks()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L382-L428)).
 5. **Automatic High-Priority Logic (Reflex):** The agent scans for targets that score exceptionally high. If found, it bypasses custom logic and reacts immediately ([`executeAutomaticHighPriorityLogic()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L212-L254)).
-6. **Worker Logic:** If no high-priority survival or reflex actions are triggered, the decision is delegated to the subclass (e.g., `PrototypeAgent`) to handle generalized exploration or lower-priority targets.
+6. **Worker Logic:** If no high-priority survival or reflex actions are triggered, the decision is delegated to the subclass (e.g., `TWAgent1`) to handle generalized exploration or lower-priority targets.
 
 ### Consensus Memory (Layered Architecture) & Zoning ([`performZoneAssignmentIfNecessary()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/ConsensusMemory.java#L147-L229))
 `ConsensusMemory` manages data in two distinct layers. **Layer 1 (Private Shadow)** stores raw, unadulterated sensor timestamps used strictly for accurate passive crowdsourcing. **Layer 2 (Consensus Map)** stores the team's shared reality, which includes the statistical age penalties used for A* pathing.
@@ -107,12 +105,12 @@ If you are looking to improve the agent's performance, the architecture exposes 
 
 ## 6. Simulation Results
 
-The table below outlines the average rewards achieved across 2 runs (of 10 full-length simulations) of [`TileworldMain.java`](Tileworld/src/tileworld/TileworldMain.java) for both predefined environment configurations using 6 (identical) `PrototypeAgent` instances.
+The table below outlines the average rewards achieved across 2 runs (of 10 full-length simulations) of [`TileworldMain.java`](Tileworld/src/tileworld/TileworldMain.java) for both predefined environment configurations using instances of [TWAgent1.java](Tileworld/src/tileworld/agent/TWAgent1.java), [TWAgent2.java](Tileworld/src/tileworld/agent/TWAgent2.java), [TWAgent3.java](Tileworld/src/tileworld/agent/TWAgent3.java), [TWAgent4.java](Tileworld/src/tileworld/agent/TWAgent4.java), [TWAgent5.java](Tileworld/src/tileworld/agent/TWAgent5.java), and [TWAgent6.java](Tileworld/src/tileworld/agent/TWAgent6.java).
 
 | Configuration File | Map Size | Object Spawns/Step | Object Lifetime | Run 1 Reward | Run 2 Reward | Average Reward |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| [`Parameters.java`](Tileworld/src/tileworld/Parameters.java) | 50x50 | 0.2 (Low) | 100 (High) | 652.7 | 657.5 | 655.1 |
-| [`Parameters2.java`](Tileworld/src/tileworld/Parameters2.java) | 80x80 | 2.0 (High) | 30 (Low) | 925.4 | 940.7 | 933.05 |
+| [`Parameters.java`](Tileworld/src/tileworld/Parameters.java) | 50x50 | 0.2 (Low) | 100 (High) | TBC | TBC | TBC |
+| [`Parameters2.java`](Tileworld/src/tileworld/Parameters2.java) | 80x80 | 2.0 (High) | 30 (Low) | TBC | TBC | TBC |
 
 ## 7. Notes & Setup
 
