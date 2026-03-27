@@ -15,6 +15,15 @@ The implementation introduces three core classes to the Tileworld framework to d
 * [**`ConsensusPathGenerator.java`**](Tileworld/src/tileworld/planners/ConsensusPathGenerator.java)
   A customized A* pathfinder. Instead of using an agent's isolated local memory, this planner plots routes strictly using the `ConsensusMemory` map. This ensures all agents calculate distances and route around obstacles using the exact same global data snapshot.
 
+Six classes extending `TWBaseAgent` are designated for the team's specialized roles:
+
+* [**`TWAgent1.java`**](Tileworld/src/tileworld/agent/TWAgent1.java) (**Courier Agent**): Prioritizes rapid turnaround and delivery speed.
+* [**`TWAgent2.java`**](Tileworld/src/tileworld/agent/TWAgent2.java) (**Hoarder Agent**): Prioritizes inventory maximization.
+* [**`TWAgent3.java`**](Tileworld/src/tileworld/agent/TWAgent3.java) (**Generalist Agent**): Focuses on the absolute highest mathematical utility.
+* [**`TWAgent4.java`**](Tileworld/src/tileworld/agent/TWAgent4.java) (**Sub-Zone Localizer**): Focuses on strict border control and map coverage.
+* [**`TWAgent5.java`**](Tileworld/src/tileworld/agent/TWAgent5.java) (**Scavenger Agent**): Acts as a "Rescue Unit" prioritizing objects closest to expiring.
+* [**`TWAgent6.java`**](Tileworld/src/tileworld/agent/TWAgent6.java) (**Vanguard Agent**): Dedicated radar scout for map exploration.
+
 ## 3. Individual Agent Implementation
 
 ### Implementation Overview
@@ -23,13 +32,15 @@ Creating a new agent strategy involves extending `TWBaseAgent` and implementing 
 
 To prevent individual implementations from accidentally corrupting the shared memory or improperly claiming targets, the `consensusMemory` variable is [strictly encapsulated](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L57-L58). Implementations must use safe, delegated pipelines to interact with the environment state.
 
-Individual agent implementations are added to the following files.
-* [TWAgent1.java](Tileworld/src/tileworld/agent/TWAgent1.java)
-* [TWAgent2.java](Tileworld/src/tileworld/agent/TWAgent2.java)
-* [TWAgent3.java](Tileworld/src/tileworld/agent/TWAgent3.java)
-* [TWAgent4.java](Tileworld/src/tileworld/agent/TWAgent4.java)
-* [TWAgent5.java](Tileworld/src/tileworld/agent/TWAgent5.java)
-* [TWAgent6.java](Tileworld/src/tileworld/agent/TWAgent6.java)
+### Implementation Guidelines
+
+To maximize our average reward, each agent implementation should adhere to its designated behavioral niche:
+1. **The Courier**: Ignores additional tiles as soon as it is carrying at least one (`carriedTiles.size() > 0`).
+2. **The Hoarder**: Ignores holes until its inventory is at maximum capacity (`carriedTiles.size() == 3`).
+3. **The Generalist**: Uses standard `calculateStandardizedScore()` to pick the mathematically optimal target.
+4. **The Localizer**: Filters out any targets that do not reside within its `explorationSubZone`.
+5. **The Scavenger**: Prioritizes targets with the lowest "slack" (Time Remaining - Distance) to prevent object expiration.
+6. **The Vanguard**: Always returns `executeExploreMove()` to ensure the shared map is updated with fresh spawns.
 
 ### Implementation Requirements & Tips
 
@@ -48,24 +59,27 @@ The implicit coordination strategy relies on several sophisticated underlying me
 Every agent's brain operates on a rigid, standardized priority queue to ensure critical survival and team-level tasks are never ignored. The hierarchy evaluates in this exact order:
 1. **Immediate Free Lunch:** If the agent is physically standing on a valid tile or hole and has capacity, it instantly executes the action ([`checkImmediateFreeLunch()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L183-L210)).
 2. **Station Search:** If the team does not yet know where the fuel station is, the agent abandons all other tasks to execute a zoned exploration sweep.
-3. **Fuel Safety Check:** If the agent's fuel drops below its dynamic, A*-distance-based safety threshold, it immediately routes to the fuel station ([`getFuelSafetyThreshold()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L690-L696)).
-4. **First Responder / Monitoring:** If the exact object lifetime is currently unknown, an agent with sufficient fuel volunteers to monitor a newly spawned object to lock in the true lifetime ([`checkMonitoringTasks()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L382-L428)).
-5. **Automatic High-Priority Logic (Reflex):** The agent scans for targets that score exceptionally high. If found, it bypasses custom logic and reacts immediately ([`executeAutomaticHighPriorityLogic()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L212-L254)).
-6. **Worker Logic:** If no high-priority survival or reflex actions are triggered, the decision is delegated to the subclass (e.g., `TWAgent1`) to handle generalized exploration or lower-priority targets.
+3. **Opportunistic Refueling (Pit Stop):** If the agent is passing near the known fuel station and has depleted a portion of its fuel, it proactively routes to top up. This proactive strategy ensures all agents benefit from improved fuel efficiency and prevents costly cross-map "panic runs" later.
+4. **Fuel Safety Check:** If the agent's fuel drops below its dynamic, A*-distance-based safety threshold, it immediately routes to the fuel station ([`getFuelSafetyThreshold()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L690-L696)).
+5. **First Responder / Monitoring:** If the exact object lifetime is currently unknown, an agent with sufficient fuel volunteers to monitor a newly spawned object to lock in the true lifetime ([`checkMonitoringTasks()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L382-L428)).
+6. **Automatic High-Priority Logic (Reflex):** The agent scans for targets that score exceptionally high. If found, it bypasses custom logic and reacts immediately ([`executeAutomaticHighPriorityLogic()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L212-L254)).
+7. **Worker Logic:** If no high-priority survival or reflex actions are triggered, the decision is delegated to the subclass (e.g., `TWAgent1`) to handle generalized exploration or lower-priority targets.
 
 ### Consensus Memory (Layered Architecture) & Zoning ([`performZoneAssignmentIfNecessary()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/ConsensusMemory.java#L147-L229))
 `ConsensusMemory` manages data in two distinct layers. **Layer 1 (Private Shadow)** stores raw, unadulterated sensor timestamps used strictly for accurate passive crowdsourcing. **Layer 2 (Consensus Map)** stores the team's shared reality, which includes the statistical age penalties used for A* pathing.
 
 To prevent agents from clumping together and redundantly exploring the same areas, `ConsensusMemory` utilizes a Hybrid Zoning Strategy:
 * **Phase 1 (Strict Columns):** Used *before* the fuel station is found. The map is [divided into strict, non-overlapping vertical columns](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/ConsensusMemory.java#L214-L224). **Why?** To maximize exploration efficiency. Agents [use a BFS algorithm to sweep their specific column](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L449-L450), guaranteeing the team finds the fuel station as quickly as possible without stepping on each other's toes.
-* **Phase 2 (Dynamic Overlapping Zones):** Activated *after* the fuel station is located. The map is [split into overlapping North and South regions](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/ConsensusMemory.java#L201-L211) with [agents divided equally between the regions](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/ConsensusMemory.java#L179-L197) (e.g., in a 6-agent team, 3 agents are assigned to the North and 3 to the South). **Why?** The primary goal shifts to **resource sharing**. By allowing multiple agents to freely wander the same large North or South zone, an agent can immediately capitalize on an object discovered—but skipped—by a nearby teammate. This level of cooperative harvesting is impossible if agents remain trapped in strict, non-overlapping columns.
+* **Phase 2 (Dynamic Overlapping Zones):** Activated *after* the fuel station is located. The map is [split into overlapping North and South regions](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/ConsensusMemory.java#L201-L211) with [agents divided equally between the regions](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/ConsensusMemory.java#L179-L197) (e.g., in a 6-agent team, 3 agents are assigned to the North and 3 to the South). **Why?** The primary goal shifts to **resource sharing**. By allowing multiple agents to freely wander the same large North or South zone, an agent can immediately capitalize on an object discovered—but skipped—by a nearby teammate.
   * *Exploration Fallback:* When there are no known targets to hunt in the zone, agents must [actively explore](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L462-L468). To maximize map coverage and prevent the 3 agents from accidentally clustering together, they dynamically slice their shared North/South zone into temporary sub-zones based on their peers' real-time X-coordinates ([`refreshExplorationSubZone()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/ConsensusMemory.java#L231-L289)). This allows agents to seamlessly shift left and right, efficiently sweeping the map without "lane-clumping."
 
 ### Utility Scoring System ([`calculateStandardizedScore()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L278-L334))
-Targets are evaluated mathematically. The formula starts with a massive base score ([`BASE_SCORE_OFFSET`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L34-L37)) to ensure positive numbers, and subtracts penalties based on:
-1. **A* Distance:** Multiplied by a distance weight.
-2. **Inventory:** Weighted heavily to force empty agents to prefer tiles and full agents to prefer holes.
-3. **Urgency (Slack):** The time remaining before the object naturally expires minus the distance required to reach it. If slack < 0, the target is instantly dropped to prevent chasing "mirages".
+Targets are evaluated mathematically to find the optimal move. The formula starts with a massive base score ([`BASE_SCORE_OFFSET`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L34-L37)) to ensure positive numbers, and applies the following modifiers:
+1. **Soft Zoning Penalty (Dynamic Task Stealing):** Rather than strictly forbidding cross-zone travel, the system applies a configurable penalty if a target is outside the agent's assigned macro-zone. This allows for flexible "task stealing"—agents will generally stay in their assigned regions but will cross borders if a target is exceptionally lucrative or close.
+2. **Cluster Bonus:** Increases the utility score of a target if it is surrounded by other nearby targets. This encourages agents to prioritize clusters, minimizing travel time between tasks and enabling more efficient batch collection.
+3. **A\* Distance Penalty:** Multiplied by a distance weight.
+4. **Inventory Penalty/Bonus:** Weighted heavily to force empty agents to prefer tiles and full agents to prefer holes.
+5. **Urgency (Slack) Penalty:** The time remaining before the object naturally expires minus the distance required to reach it. If slack < 0, the target is instantly dropped to prevent chasing "mirages".
 
 ### Heartbeat `STATUS` Broadcasts ([`communicate()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/TWBaseAgent.java#L894-L965))
 Every step, every agent broadcasts a single `STATUS` string containing its Name, X, Y, Inventory Size, and Fuel Level, appended with any newly discovered/removed objects. Because all agents process this in [`updateState()`](https://github.com/chuo-v/multi-agent-tileworld/blob/704860a0e8c41f267f6f5cf0f995a16544ad7a61/submission/Tileworld/src/tileworld/agent/ConsensusMemory.java#L593-L668), the team maintains perfect real-time knowledge of who is closest to which target. This allows for conflict-free implicit target claiming without the massive overhead of explicit negotiation.
