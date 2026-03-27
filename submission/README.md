@@ -1,12 +1,12 @@
 # Tileworld Multi-Agent Implementation
 
 ## 1. Overview
-This directory contains our final submission for the Tileworld multi-agent simulation. The architecture is built around the concept of **Implicit Coordination v2.0**. Rather than using a centralized leader or explicit task-negotiation protocols, agents operate autonomously while maintaining a perfectly synchronized "Shared Map" via broadcast communication.
+This directory contains our final submission for the Tileworld multi-agent simulation. The architecture is built around the concept of **Implicit Coordination v2.0**, and is based off [prototype-2](../prototypes/prototype-2/) (an enhanced version of [prototype-1](../prototypes/prototype-1/)). Rather than using a centralized leader or explicit task-negotiation protocols, agents operate autonomously while maintaining a perfectly synchronized "Shared Map" via broadcast communication.
 
 To ensure consistent survival and coordination logic across the team, the architecture relies heavily on Object-Oriented subclassing. A universal base class acts as the "Operating System," enforcing strict rules for survival, yielding, and memory synchronization, while specific agent implementations subclass this base to define unique worker strategies and optimizations.
 
 ## 2. Classes Added
-The prototype introduces four core classes to the Tileworld framework to drive the implicit coordination strategy:
+The implementation introduces three core classes to the Tileworld framework to drive the implicit coordination strategy:
 
 * [**`TWBaseAgent.java`**](Tileworld/src/tileworld/agent/TWBaseAgent.java)
   The abstract core of the agent team. It enforces a strict priority hierarchy for every tick and handles the standardized communication protocol and object utility scoring.
