@@ -8,8 +8,7 @@ import tileworld.environment.TWEnvironment;
 
 /**
  * A specialized A* Pathfinder for Implicit Coordination.
- * * CRITICAL LOGIC:
- * This planner ignores the agent's private sensor data (TWAgentWorkingMemory).
+ * * This planner ignores the agent's private sensor data (TWAgentWorkingMemory).
  * Instead, it ONLY checks the ConsensusMemory (Layer 2) for obstacles.
  * * This ensures that when Agent A and Agent B calculate the distance to a tile,
  * they use the exact same map snapshot, even if Agent A is standing right next
@@ -38,7 +37,6 @@ public class ConsensusPathGenerator implements TWPathGenerator {
     }
 
     public TWPath findPath(int sx, int sy, int tx, int ty) {
-        // --- CRITICAL CHANGE START ---
         // Access ConsensusMemory directly to check the Shared Map
         ConsensusMemory memory = (ConsensusMemory) agent.getMemory();
 
@@ -46,7 +44,6 @@ public class ConsensusPathGenerator implements TWPathGenerator {
         if (memory.isConsensusBlocked(tx, ty)) {
             return null;
         }
-        // --- CRITICAL CHANGE END ---
 
         nodes[sx][sy].cost = 0;
         nodes[sx][sy].depth = 0;
@@ -75,11 +72,9 @@ public class ConsensusPathGenerator implements TWPathGenerator {
                     int xp = x + current.x;
                     int yp = y + current.y;
 
-                    // --- CRITICAL CHANGE START ---
                     // Standard check: is it in bounds?
                     // Custom check: !memory.isConsensusBlocked (Ignores private sensors)
                     if (isValidLocation(sx, sy, xp, yp) && !memory.isConsensusBlocked(xp, yp)) {
-                    // --- CRITICAL CHANGE END ---
 
                         double nextStepCost = current.cost + map.getDistance(current.x, current.y, xp, yp);
                         Node neighbour = nodes[xp][yp];
