@@ -504,35 +504,47 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
                     TWEntity oldObj = prevPercept.getO();
 
                     if (!sensedObjects.contains(oldObj)) {
-                        if (oldObj instanceof TWObject) {
+                        // Only proceed with estimation/calculation of lifetime if cell
+                        // is empty to avoid scenarios where it can be incorrectly determined
+                        boolean cellIsEmpty = true;
+                        for (int i = 0; i < sensedObjects.size(); i++) {
+                            TWEntity obj = (TWEntity) sensedObjects.get(i);
+                            if (obj != null && obj.getX() == x && obj.getY() == y) {
+                                cellIsEmpty = false;
+                                break;
+                            }
+                        }
+
+                        if (oldObj instanceof TWObject && cellIsEmpty) {
                             double lastSeen = lastObservationGrid[x][y];
 
                             if ((currentTime - lastSeen) <= 1.5) {
                                 double startTime = prevPercept.getT();
                                 int calculatedLife = (int) (currentTime - startTime);
 
-                                // Only Obstacles provide definite data (Tiles/Holes can be interacted with)
-                                if (witnessedCreationGrid[x][y] && (oldObj instanceof TWObstacle)) {
-                                    System.out.println("Passive Crowdsourcing: " + me.getName() +
-                                        " found DEFINITE lifetime: " + calculatedLife);
+                                // Only execute block if value is >= current knowledge
+                                if (calculatedLife >= this.objectLifetime) {
+	                                // Only Obstacles provide definite data (Tiles/Holes can be interacted with)
+	                                if (witnessedCreationGrid[x][y] && (oldObj instanceof TWObstacle)) {
+	                                    System.out.println("Passive Crowdsourcing: " + me.getName() +
+	                                        " found DEFINITE lifetime: " + calculatedLife);
 
-                                    this.updateLifetime(calculatedLife);
-                                    this.discoveredLifetime = calculatedLife;
-                                    this.definiteLifetimeKnown = true;
-                                    this.discoveredLifetimeIsDefinite = true;
+	                                    this.updateLifetime(calculatedLife);
+	                                    this.discoveredLifetime = calculatedLife;
+	                                    this.definiteLifetimeKnown = true;
+	                                    this.discoveredLifetimeIsDefinite = true;
 
-                                } else {
-                                    if (calculatedLife > this.objectLifetime) {
+	                                } else if (calculatedLife > this.objectLifetime) {
                                         this.updateLifetime(calculatedLife);
                                         this.discoveredLifetime = calculatedLife;
                                         System.out.println("Passive Crowdsourcing: " + me.getName() +
                                             " estimated lifetime >= " + calculatedLife);
-                                    }
+	                                }
                                 }
                             }
+                            privateShadow[x][y] = null;
+                            witnessedCreationGrid[x][y] = false;
                         }
-                        privateShadow[x][y] = null;
-                        witnessedCreationGrid[x][y] = false;
                     }
                 }
             }
@@ -566,7 +578,11 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
             } else {
                 boolean witnessCreation = false;
                 double lastLook = lastObservationGrid[x][y];
-                if (lastLook != -1 && (currentTime - lastLook) <= 1.5) {
+
+                // Only witnessed if:
+                // 1. We looked recently (Last Look)
+                // 2. AND we previously believed the cell was EMPTY (existing == null)
+                if (lastLook != -1 && (currentTime - lastLook) <= 1.5 && existing == null) {
                     witnessCreation = true;
                 }
 
