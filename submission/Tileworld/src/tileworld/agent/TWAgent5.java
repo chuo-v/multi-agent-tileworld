@@ -1,5 +1,7 @@
 package tileworld.agent;
 
+import java.util.Map;
+import sim.util.Int2D;
 import tileworld.environment.TWEnvironment;
 
 /**
@@ -38,6 +40,72 @@ public class TWAgent5 extends TWBaseAgent {
      */
     @Override
     protected TWThought executeWorkerLogic() {
-        return executeExploreMove(); // placeholder
+        ConsensusMemory memory = (ConsensusMemory) this.getMemory();
+        int currentStep = (int) this.getEnvironment().schedule.getSteps();
+        int knownLifetime = memory.getKnownLifetime();
+
+        Int2D bestTarget = null;
+        TWAction bestAction = null;
+        double bestSlack = Double.MAX_VALUE;
+        double bestDistance = Double.MAX_VALUE;
+
+        if (this.carriedTiles.size() < 3) {
+            for (Map.Entry<Int2D, Integer> entry : memory.getConsensusTiles().entrySet()) {
+                Int2D target = entry.getKey();
+                Integer creationTime = entry.getValue();
+
+                double dist = getStandardizedDistance(this.getX(), this.getY(), target.x, target.y);
+                if (dist == Double.MAX_VALUE) continue;
+
+                double slack = (creationTime + knownLifetime) - (currentStep + dist);
+                if (slack < 0) continue;
+
+                int standardScore = standardizedScoreForTile(target.x, target.y);
+                if (standardScore == Integer.MIN_VALUE) continue;
+                if (!isBestCandidate(target.x, target.y, standardScore, this.getEnvironment().getMessages(), TWAction.PICKUP)) {
+                    continue;
+                }
+
+                if (slack < bestSlack || (slack == bestSlack && dist < bestDistance)) {
+                    bestSlack = slack;
+                    bestDistance = dist;
+                    bestTarget = target;
+                    bestAction = TWAction.PICKUP;
+                }
+            }
+        }
+
+        if (this.carriedTiles.size() > 0) {
+            for (Map.Entry<Int2D, Integer> entry : memory.getConsensusHoles().entrySet()) {
+                Int2D target = entry.getKey();
+                Integer creationTime = entry.getValue();
+
+                double dist = getStandardizedDistance(this.getX(), this.getY(), target.x, target.y);
+                if (dist == Double.MAX_VALUE) continue;
+
+                double slack = (creationTime + knownLifetime) - (currentStep + dist);
+                if (slack < 0) continue;
+
+                int standardScore = standardizedScoreForHole(target.x, target.y);
+                if (standardScore == Integer.MIN_VALUE) continue;
+                if (!isBestCandidate(target.x, target.y, standardScore, this.getEnvironment().getMessages(), TWAction.PUTDOWN)) {
+                    continue;
+                }
+
+                if (slack < bestSlack || (slack == bestSlack && dist < bestDistance)) {
+                    bestSlack = slack;
+                    bestDistance = dist;
+                    bestTarget = target;
+                    bestAction = TWAction.PUTDOWN;
+                }
+            }
+        }
+
+        if (bestTarget != null) {
+            this.explorationTarget = null;
+            return executePathTo(bestTarget.x, bestTarget.y, bestAction);
+        }
+
+        return executeExploreMove();
     }
 }
