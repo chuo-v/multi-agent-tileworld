@@ -92,7 +92,18 @@ public abstract class TWBaseAgent extends TWAgent {
         this.memory = new ConsensusMemory(this, env.schedule, env.getxDimension(), env.getyDimension());
         this.consensusMemory = (ConsensusMemory) this.memory;
 
-        this.fuelSafetyBuffer = (int)(0.4 * (env.getxDimension() + env.getyDimension()));
+        // --- STAGGERED FUELING PIT STOP IMPLEMENTATION ---
+        int idOffset = 0;
+        try {
+            // Extract the number from the agent's name (e.g., "Agent1" -> 1)
+            // Multiply by 15 to space out their return to the fuel station
+            idOffset = Integer.parseInt(name.replaceAll("\\D+","")) * 15;
+        } catch (Exception e) {
+            idOffset = 0; // Fallback 
+        }
+
+        // Add the offset so agents refuel in staggered waves
+        this.fuelSafetyBuffer = (int)(0.4 * (env.getxDimension() + env.getyDimension())) + idOffset;
     }
 
     // --- CORE BEHAVIOR ---
@@ -664,7 +675,7 @@ public abstract class TWBaseAgent extends TWAgent {
      * * @return A random TWDirection.
      */
     protected TWDirection getRandomDirection() {
-        // values() are [E, N, W, S, Z]. We only want indices 0-3.
+        // values() are[E, N, W, S, Z]. We only want indices 0-3.
         return TWDirection.values()[this.getEnvironment().random.nextInt(4)];
     }
 
