@@ -494,57 +494,73 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
             }
         }
 
-        // 2. Detect Deaths
+        // 2. Detect Deaths & Clear Ghosts
         for (int x = me.getX() - range; x <= me.getX() + range; x++) {
             for (int y = me.getY() - range; y <= me.getY() + range; y++) {
                 if (x < 0 || x >= xDim || y < 0 || y >= yDim) continue;
 
+                // Determine if the cell is completely empty right now
+                boolean cellIsEmpty = true;
+                for (int i = 0; i < sensedObjects.size(); i++) {
+                    TWEntity obj = (TWEntity) sensedObjects.get(i);
+                    if (obj != null && obj.getX() == x && obj.getY() == y) {
+                        cellIsEmpty = false;
+                        break;
+                    }
+                }
+
+                Int2D pos = new Int2D(x, y);
+
+                // Proactively clean the Consensus map (outside private shadow)
+                if (cellIsEmpty) {
+                    if (consensusTiles.containsKey(pos)) {
+                        consensusTiles.remove(pos);
+                        queueRemoval("TILE", x, y);
+                    }
+                    if (consensusHoles.containsKey(pos)) {
+                        consensusHoles.remove(pos);
+                        queueRemoval("HOLE", x, y);
+                    }
+                    if (consensusObstacles.containsKey(pos)) {
+                        consensusObstacles.remove(pos);
+                        queueRemoval("OBSTACLE", x, y);
+                    }
+                }
+
+                // Lifetime mathematics (requires private shadow)
                 TWAgentPercept prevPercept = privateShadow[x][y];
                 if (prevPercept != null) {
                     TWEntity oldObj = prevPercept.getO();
 
-                    if (!sensedObjects.contains(oldObj)) {
-                        // Only proceed with estimation/calculation of lifetime if cell
-                        // is empty to avoid scenarios where it can be incorrectly determined
-                        boolean cellIsEmpty = true;
-                        for (int i = 0; i < sensedObjects.size(); i++) {
-                            TWEntity obj = (TWEntity) sensedObjects.get(i);
-                            if (obj != null && obj.getX() == x && obj.getY() == y) {
-                                cellIsEmpty = false;
-                                break;
-                            }
-                        }
+                    if (oldObj instanceof TWObject && cellIsEmpty) {
+                        double lastSeen = lastObservationGrid[x][y];
 
-                        if (oldObj instanceof TWObject && cellIsEmpty) {
-                            double lastSeen = lastObservationGrid[x][y];
+                        if ((currentTime - lastSeen) <= 1.5) {
+                            double startTime = prevPercept.getT();
+                            int calculatedLife = (int) (currentTime - startTime);
 
-                            if ((currentTime - lastSeen) <= 1.5) {
-                                double startTime = prevPercept.getT();
-                                int calculatedLife = (int) (currentTime - startTime);
+                            // Only execute block if value is >= current knowledge
+                            if (calculatedLife >= this.objectLifetime) {
+                                // Only Obstacles provide definite data (Tiles/Holes can be interacted with)
+                                if (witnessedCreationGrid[x][y] && (oldObj instanceof TWObstacle)) {
+                                    System.out.println("Passive Crowdsourcing: " + me.getName() +
+                                        " found DEFINITE lifetime: " + calculatedLife);
 
-                                // Only execute block if value is >= current knowledge
-                                if (calculatedLife >= this.objectLifetime) {
-	                                // Only Obstacles provide definite data (Tiles/Holes can be interacted with)
-	                                if (witnessedCreationGrid[x][y] && (oldObj instanceof TWObstacle)) {
-	                                    System.out.println("Passive Crowdsourcing: " + me.getName() +
-	                                        " found DEFINITE lifetime: " + calculatedLife);
+                                    this.updateLifetime(calculatedLife);
+                                    this.discoveredLifetime = calculatedLife;
+                                    this.definiteLifetimeKnown = true;
+                                    this.discoveredLifetimeIsDefinite = true;
 
-	                                    this.updateLifetime(calculatedLife);
-	                                    this.discoveredLifetime = calculatedLife;
-	                                    this.definiteLifetimeKnown = true;
-	                                    this.discoveredLifetimeIsDefinite = true;
-
-	                                } else if (calculatedLife > this.objectLifetime) {
-                                        this.updateLifetime(calculatedLife);
-                                        this.discoveredLifetime = calculatedLife;
-                                        System.out.println("Passive Crowdsourcing: " + me.getName() +
-                                            " estimated lifetime >= " + calculatedLife);
-	                                }
+                                } else if (calculatedLife > this.objectLifetime) {
+                                    this.updateLifetime(calculatedLife);
+                                    this.discoveredLifetime = calculatedLife;
+                                    System.out.println("Passive Crowdsourcing: " + me.getName() +
+                                        " estimated lifetime >= " + calculatedLife);
                                 }
                             }
-                            privateShadow[x][y] = null;
-                            witnessedCreationGrid[x][y] = false;
                         }
+                        privateShadow[x][y] = null;
+                        witnessedCreationGrid[x][y] = false;
                     }
                 }
             }
