@@ -1,7 +1,6 @@
 package tileworld.planners;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import java.util.PriorityQueue;
 import tileworld.agent.ConsensusMemory;
 import tileworld.agent.TWAgent;
 import tileworld.environment.TWEnvironment;
@@ -16,80 +15,90 @@ import tileworld.environment.TWEnvironment;
  */
 public class ConsensusPathGenerator implements TWPathGenerator {
 
-    private ArrayList<Node> closed = new ArrayList<>();
-    private SortedList open = new SortedList();
-    private TWEnvironment map;
+    // Counter used to instantly verify if a node is in the open/closed list for the current path search
+    private long currentSearchId = 0;
+    private PriorityQueue<SearchEntry> open = new PriorityQueue<>();
+    private final int xDim, yDim; // Dimensions cached for speed
     private int maxSearchDistance;
     private Node[][] nodes;
     private TWAgent agent;
 
     public ConsensusPathGenerator(TWEnvironment map, TWAgent agent, int maxSearchDistance) {
         this.agent = agent;
-        this.map = map;
+        this.xDim = map.getxDimension();
+        this.yDim = map.getyDimension();
         this.maxSearchDistance = maxSearchDistance;
 
-        nodes = new Node[map.getxDimension()][map.getyDimension()];
-        for (int x = 0; x < map.getxDimension(); x++) {
-            for (int y = 0; y < map.getyDimension(); y++) {
+        nodes = new Node[xDim][yDim];
+        for (int x = 0; x < xDim; x++) {
+            for (int y = 0; y < yDim; y++) {
                 nodes[x][y] = new Node(x, y);
             }
         }
     }
 
     public TWPath findPath(int sx, int sy, int tx, int ty) {
-        // Access ConsensusMemory directly to check the Shared Map
-        ConsensusMemory memory = (ConsensusMemory) agent.getMemory();
+        // If the minimum possible steps (Manhattan) exceeds limit, return null
+        if (Math.abs(sx - tx) + Math.abs(sy - ty) > maxSearchDistance) return null;
 
+        currentSearchId++;
+        ConsensusMemory memory = (ConsensusMemory) agent.getMemory();
         // If the target itself is blocked in the consensus map, we can't go there
         if (memory.isConsensusBlocked(tx, ty)) {
             return null;
         }
 
-        nodes[sx][sy].cost = 0;
-        nodes[sx][sy].depth = 0;
-        closed.clear();
+        Node startNode = nodes[sx][sy];
+        startNode.cost = 0;
+        startNode.depth = 0;
+        startNode.heuristic = getCost(sx, sy, tx, ty);
+        startNode.openSearchId = currentSearchId;
+
         open.clear();
-        open.add(nodes[sx][sy]);
+        open.add(new SearchEntry(startNode, startNode.heuristic));
 
         nodes[tx][ty].parent = null;
 
-        int maxDepth = 0;
-        while ((maxDepth < maxSearchDistance) && (open.size() != 0)) {
-            Node current = getFirstInOpen();
-            if (current == nodes[tx][ty]) {
-                break;
-            }
+        while (!open.isEmpty()) {
+            SearchEntry entry = open.poll();
+            Node current = entry.node;
 
-            removeFromOpen(current);
+            // Lazy Deletion: Check if this entry is stale
+            if (entry.fScore > (current.cost + current.heuristic)) continue;
+            if (inClosedList(current)) continue;
+
+            if (current == nodes[tx][ty]) break;
+
+            // Limit search depth per-path
+            if (current.depth >= maxSearchDistance) continue;
+
             addToClosed(current);
 
             // Check neighbors (standard 4-direction movement)
             for (int x = -1; x < 2; x++) {
                 for (int y = -1; y < 2; y++) {
-                    if ((x == 0) && (y == 0)) continue;
-                    if ((x != 0) && (y != 0)) continue; // No diagonal
+                    if ((x == 0 && y == 0) || (x != 0 && y != 0)) continue;
 
                     int xp = x + current.x;
                     int yp = y + current.y;
 
                     // Standard check: is it in bounds?
                     // Custom check: !memory.isConsensusBlocked (Ignores private sensors)
-                    if (isValidLocation(sx, sy, xp, yp) && !memory.isConsensusBlocked(xp, yp)) {
-
-                        double nextStepCost = current.cost + map.getDistance(current.x, current.y, xp, yp);
+                    if (xp >= 0 && xp < xDim && yp >= 0 && yp < yDim && !memory.isConsensusBlocked(xp, yp)) {
+                        double nextStepCost = current.cost + 1.0;
                         Node neighbour = nodes[xp][yp];
-                        neighbour.visited = true;
 
-                        if (nextStepCost < neighbour.cost) {
-                            if (inOpenList(neighbour)) removeFromOpen(neighbour);
-                            if (inClosedList(neighbour)) removeFromClosed(neighbour);
-                        }
-
-                        if (!inOpenList(neighbour) && !(inClosedList(neighbour))) {
+                        // Only update if the node is brand new or we found a shorter path
+                        boolean isNew = !inOpenList(neighbour) && !inClosedList(neighbour);
+                        if (isNew || nextStepCost < neighbour.cost) {
                             neighbour.cost = nextStepCost;
-                            neighbour.heuristic = getCost(xp, yp, tx, ty);
-                            maxDepth = Math.max(maxDepth, neighbour.setParent(current));
-                            addToOpen(neighbour);
+                            if (isNew) neighbour.heuristic = getCost(xp, yp, tx, ty);
+
+                            neighbour.setParent(current);
+                            neighbour.openSearchId = currentSearchId; // Mark as in-queue
+
+                            // Add new entry with current best f-score
+                            open.add(new SearchEntry(neighbour, neighbour.cost + neighbour.heuristic));
                         }
                     }
                 }
@@ -100,7 +109,6 @@ public class ConsensusPathGenerator implements TWPathGenerator {
 
         TWPath path = new TWPath(tx, ty);
         Node target = nodes[tx][ty];
-        target = target.parent;
         while (target != nodes[sx][sy]) {
             path.prependStep(target.x, target.y);
             target = target.parent;
@@ -109,46 +117,37 @@ public class ConsensusPathGenerator implements TWPathGenerator {
         return path;
     }
 
-    // --- Standard Helpers (Copied to keep class self-contained) ---
-    private Node getFirstInOpen() { return (Node) open.first(); }
-    private void addToOpen(Node node) { open.add(node); }
-    private boolean inOpenList(Node node) { return open.contains(node); }
-    private void removeFromOpen(Node node) { open.remove(node); }
-    private void addToClosed(Node node) { closed.add(node); }
-    private boolean inClosedList(Node node) { return closed.contains(node); }
-    private void removeFromClosed(Node node) { closed.remove(node); }
-
-    private boolean isValidLocation(int sx, int sy, int x, int y) {
-        return (map.isValidLocation(x, y) && ((sx != x) || (sy != y)));
-    }
+    private boolean inOpenList(Node node) { return node.openSearchId == currentSearchId; }
+    private void addToClosed(Node node) { node.closedSearchId = currentSearchId; }
+    private boolean inClosedList(Node node) { return node.closedSearchId == currentSearchId; }
 
     public double getCost(int currentX, int currentY, int goalX, int goalY) {
-        return Math.sqrt(Math.pow(goalX - currentX, 2) + Math.pow(goalY - currentY, 2));
+        // Use multiplication instead of Math.pow for faster calculations
+        int dx = goalX - currentX;
+        int dy = goalY - currentY;
+        return Math.sqrt(dx * dx + dy * dy);
     }
 
-    // --- Inner Classes ---
-    private class SortedList {
-        private ArrayList<Node> list = new ArrayList<>();
-        public Object first() { return list.get(0); }
-        public void clear() { list.clear(); }
-        public void add(Node o) { list.add(o); Collections.sort(list); }
-        public void remove(Node o) { list.remove(o); }
-        public int size() { return list.size(); }
-        public boolean contains(Node o) { return list.contains(o); }
+    /** Wrapper to keep the PriorityQueue heap structure safe */
+    private class SearchEntry implements Comparable<SearchEntry> {
+        Node node;
+        double fScore;
+        SearchEntry(Node n, double f) { this.node = n; this.fScore = f; }
+        @Override
+        public int compareTo(SearchEntry o) { return Double.compare(this.fScore, o.fScore); }
     }
 
-    private class Node implements Comparable<Node> {
-        private int x, y;
-        private double cost;
-        private Node parent;
-        private double heuristic;
-        private int depth;
-        private boolean visited;
+    private class Node {
+        int x, y;
+        double cost, heuristic;
+        Node parent;
+        int depth;
+        long openSearchId = -1, closedSearchId = -1;
 
-        public Node(int x, int y) { this.x = x; this.y = y; }
-        public int setParent(Node parent) { depth = parent.depth + 1; this.parent = parent; return depth; }
-        public int compareTo(Node other) {
-            return Double.compare(heuristic + cost, other.heuristic + other.cost);
+        Node(int x, int y) { this.x = x; this.y = y; }
+        void setParent(Node parent) {
+            this.depth = parent.depth + 1;
+            this.parent = parent;
         }
     }
 }

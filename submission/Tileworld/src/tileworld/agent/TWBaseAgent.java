@@ -680,12 +680,18 @@ public abstract class TWBaseAgent extends TWAgent {
     }
 
     /**
-     * Instantiates and returns the configured A* path generator for the agent.
-     * * @return ConsensusPathGenerator instance.
+     * Retrieves the configured A* path generator for the agent.
+     * * This method implements a lazy initialization pattern, ensuring the
+     * {@code ConsensusPathGenerator} is instantiated only once and reused
+     * across all subsequent calls.
+     * * @return The cached ConsensusPathGenerator instance for this agent.
      */
     protected ConsensusPathGenerator getPathGenerator() {
-        int depth = Math.max(100, (this.getEnvironment().getxDimension() + this.getEnvironment().getyDimension()) * 2);
-        return new ConsensusPathGenerator(this.getEnvironment(), this, depth);
+        if (this.pathGenerator == null) {
+            int depth = Math.max(100, (this.getEnvironment().getxDimension() + this.getEnvironment().getyDimension()) * 2);
+            this.pathGenerator = new ConsensusPathGenerator(this.getEnvironment(), this, depth);
+        }
+        return this.pathGenerator;
     }
 
     // --- FUEL & METRICS HELPERS ---
@@ -763,7 +769,8 @@ public abstract class TWBaseAgent extends TWAgent {
         }
 
         TWPath path = getPathGenerator().findPath(startX, startY, endX, endY);
-        double dist = (path == null) ? Double.MAX_VALUE : path.getpath().size();
+        // Starting cell is included in the path, so 1 is subtracted from path size
+        double dist = (path == null) ? Double.MAX_VALUE : (path.getpath().size() - 1);
 
         distanceCache.put(cacheKey, dist);
         return dist;
