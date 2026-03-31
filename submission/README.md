@@ -130,8 +130,8 @@ The following results summarize the average rewards achieved across 10 independe
 
 | Config | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | AVG |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Config 1** | 650.6 | 641.4 | 647.4 | 638.1 | 656.2 | 642.5 | 644.5 | 651.9 | 649.9 | 646.8 | **646.9** |
-| **Config 2** | 931.3 | 919.2 | 929.5 | 908.8 | 906.9 | 892.3 | 917.0 | 906.4 | 918.3 | 929.1 | **915.9** |
+| **Config 1** | 655.9 | 651.8 | 652.1 | 644.0 | 650.5 | 644.0 | 649.9 | 657.5 | 655.9 | 669.6 | **653.1** |
+| **Config 2** | 934.6 | 943.4 | 955.5 | 939.3 | 931.6 | 953.3 | 937.5 | 939.9 | 947.5 | 968.2 | **945.0** |
 
 **Note:** Columns **R1–R10** represent the average reward of a 10-simulation batch. The **AVG** column provides the grand mean across all 100 total simulations per configuration.
 
