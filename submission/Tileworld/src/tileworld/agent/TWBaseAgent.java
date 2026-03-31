@@ -638,12 +638,19 @@ public abstract class TWBaseAgent extends TWAgent {
         ArrayList<Message> messages = this.getEnvironment().getMessages();
 
         for (Message msg : messages) {
-            String[] parts = msg.getMessage().split(":")[0].equals("STATUS") ? msg.getMessage().split(":") : null;
-            if (parts != null && parts[1].compareTo(this.getName()) < 0) {
+            String content = msg.getMessage();
+            int firstSemi = content.indexOf(';');
+            String statusPart = (firstSemi == -1) ? content : content.substring(0, firstSemi);
+            String[] parts = statusPart.split(":");
+
+            if (!parts[0].equals("STATUS")) continue;
+
+            if (parts[1].compareTo(this.getName()) < 0) {
                int px = Integer.parseInt(parts[2]), py = Integer.parseInt(parts[3]);
                if (Math.abs(px - this.getX()) + Math.abs(py - this.getY()) <= 1) { superiorX=px; superiorY=py; break; }
             }
         }
+
         if (superiorX == -1) {
             return new TWThought(TWAction.MOVE, TWDirection.Z);
         }
@@ -804,10 +811,13 @@ public abstract class TWBaseAgent extends TWAgent {
         }
 
         for (Message msg : peerMessages) {
-            String content = msg.getMessage();
             // Expected format: STATUS:name:x:y:inv:fuel;...
-            String[] parts = content.split(";")[0].split(":");
-            if (!parts[0].equals("STATUS")) continue; // Skip if malformed
+            String content = msg.getMessage();
+            int firstSemi = content.indexOf(';');
+            String statusPart = (firstSemi == -1) ? content : content.substring(0, firstSemi);
+            String[] parts = statusPart.split(":");
+
+            if (!parts[0].equals("STATUS")) continue;
             String peerName = parts[1];
             if (peerName.equals(this.getName())) continue; // Skip myself
 
@@ -832,7 +842,6 @@ public abstract class TWBaseAgent extends TWAgent {
             // --- Check Mathematical Upper Bound (Manhattan Fast-Fail) ---
             int peerManhattan = Math.abs(peerX - targetX) + Math.abs(peerY - targetY);
             int maxPossiblePeerScore = BASE_SCORE_OFFSET - peerZonePenalty + clusterBonus;
-
             if (action == TWAction.PUTDOWN) {
                 maxPossiblePeerScore += -(peerManhattan * DISTANCE_WEIGHT) + (peerInv * INVENTORY_WEIGHT);
             } else {
@@ -888,7 +897,11 @@ public abstract class TWBaseAgent extends TWAgent {
      */
     protected boolean shouldYieldMove(int nextX, int nextY, ArrayList<Message> peerMessages) {
         for (Message msg : peerMessages) {
-            String[] parts = msg.getMessage().split(";")[0].split(":");
+            String content = msg.getMessage();
+            int firstSemi = content.indexOf(';');
+            String statusPart = (firstSemi == -1) ? content : content.substring(0, firstSemi);
+            String[] parts = statusPart.split(":");
+
             if (!parts[0].equals("STATUS")) continue;
 
             String peerName = parts[1];
