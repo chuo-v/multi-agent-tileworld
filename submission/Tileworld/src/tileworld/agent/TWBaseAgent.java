@@ -29,6 +29,14 @@ import tileworld.planners.TWPathStep;
  */
 public abstract class TWBaseAgent extends TWAgent {
 
+    /** Lightweight container for peer status */
+    protected static class PeerState {
+        String name; int x, y, inv; double fuel;
+        public PeerState(String name, int x, int y, int inv, double fuel) {
+            this.name = name; this.x = x; this.y = y; this.inv = inv; this.fuel = fuel;
+        }
+    }
+
     // --- CONSTANTS ---
 
     /**
@@ -69,6 +77,9 @@ public abstract class TWBaseAgent extends TWAgent {
 
     /** Flag tracking if the last execution step threw a CellBlockedException. */
     private boolean lastActionFailed = false;
+
+    /** Cache of peer states parsed once per step */
+    protected List<PeerState> currentPeerStates = new ArrayList<>();
 
     /** Cache to memoize standardized A* distance calculations within a single step. */
     private Map<String, Double> distanceCache = new HashMap<>();
@@ -121,11 +132,23 @@ public abstract class TWBaseAgent extends TWAgent {
      */
     @Override
     protected final TWThought think() {
+        currentPeerStates.clear();
         distanceCache.clear();
 
         // Sync memory
         ArrayList<Message> messages = this.getEnvironment().getMessages();
         this.consensusMemory.updateState(messages, (int)this.getEnvironment().schedule.getSteps());
+
+        for (Message msg : messages) {
+            String content = msg.getMessage();
+            int firstSemi = content.indexOf(';');
+            String statusPart = (firstSemi == -1) ? content : content.substring(0, firstSemi);
+            String[] parts = statusPart.split(":");
+            if (parts[0].equals("STATUS")) {
+                currentPeerStates.add(new PeerState(parts[1], Integer.parseInt(parts[2]),
+                    Integer.parseInt(parts[3]), Integer.parseInt(parts[4]), Double.parseDouble(parts[5])));
+            }
+        }
 
         if (lastActionFailed) {
             // Reset targets to not get stuck if the pathfinder keeps picking the same route.
@@ -637,17 +660,13 @@ public abstract class TWBaseAgent extends TWAgent {
         int superiorX = -1; int superiorY = -1;
         ArrayList<Message> messages = this.getEnvironment().getMessages();
 
-        for (Message msg : messages) {
-            String content = msg.getMessage();
-            int firstSemi = content.indexOf(';');
-            String statusPart = (firstSemi == -1) ? content : content.substring(0, firstSemi);
-            String[] parts = statusPart.split(":");
-
-            if (!parts[0].equals("STATUS")) continue;
-
-            if (parts[1].compareTo(this.getName()) < 0) {
-               int px = Integer.parseInt(parts[2]), py = Integer.parseInt(parts[3]);
-               if (Math.abs(px - this.getX()) + Math.abs(py - this.getY()) <= 1) { superiorX=px; superiorY=py; break; }
+        for (PeerState peer : currentPeerStates) {
+            if (peer.name.compareTo(this.getName()) < 0) {
+                if (Math.abs(peer.x - this.getX()) + Math.abs(peer.y - this.getY()) <= 1) {
+                    superiorX = peer.x;
+                    superiorY = peer.y;
+                    break;
+                }
             }
         }
 
@@ -810,49 +829,35 @@ public abstract class TWBaseAgent extends TWAgent {
             clusterBonus = getClusterCount(targetX, targetY, consensusMemory.getConsensusHoles().keySet()) * clusterBonusMultiplier;
         }
 
-        for (Message msg : peerMessages) {
-            // Expected format: STATUS:name:x:y:inv:fuel;...
-            String content = msg.getMessage();
-            int firstSemi = content.indexOf(';');
-            String statusPart = (firstSemi == -1) ? content : content.substring(0, firstSemi);
-            String[] parts = statusPart.split(":");
+        for (PeerState peer : currentPeerStates) {
+            if (peer.name.equals(this.getName())) continue;
 
-            if (!parts[0].equals("STATUS")) continue;
-            String peerName = parts[1];
-            if (peerName.equals(this.getName())) continue; // Skip myself
-
-            int peerX = Integer.parseInt(parts[2]);
-            int peerY = Integer.parseInt(parts[3]);
-            int peerInv = Integer.parseInt(parts[4]);
-            double peerFuel = Double.parseDouble(parts[5]);
-
-            if (peerFuel < getPeerFuelSafetyThreshold(peerX, peerY)) continue;
-
-            if (action == TWAction.PICKUP && peerInv >= 3) continue;
-            if (action == TWAction.PUTDOWN && peerInv == 0) continue;
+            if (peer.fuel < getPeerFuelSafetyThreshold(peer.x, peer.y)) continue;
+            if (action == TWAction.PICKUP && peer.inv >= 3) continue;
+            if (action == TWAction.PUTDOWN && peer.inv == 0) continue;
 
             // --- SOFT ZONING CHECK ---
             int peerZonePenalty = 0;
-            Rectangle peerZone = consensusMemory.getZone(peerName);
+            Rectangle peerZone = consensusMemory.getZone(peer.name);
             if (peerZone != null && !peerZone.contains(targetX, targetY)) {
                 int mapDimensionSum = this.getEnvironment().getxDimension() + this.getEnvironment().getyDimension();
                 peerZonePenalty = (mapDimensionSum / 2) * DISTANCE_WEIGHT; // Approx 500 for 50x50 map
             }
 
             // --- Check Mathematical Upper Bound (Manhattan Fast-Fail) ---
-            int peerManhattan = Math.abs(peerX - targetX) + Math.abs(peerY - targetY);
+            int peerManhattan = Math.abs(peer.x - targetX) + Math.abs(peer.y - targetY);
             int maxPossiblePeerScore = BASE_SCORE_OFFSET - peerZonePenalty + clusterBonus;
             if (action == TWAction.PUTDOWN) {
-                maxPossiblePeerScore += -(peerManhattan * DISTANCE_WEIGHT) + (peerInv * INVENTORY_WEIGHT);
+                maxPossiblePeerScore += -(peerManhattan * DISTANCE_WEIGHT) + (peer.inv * INVENTORY_WEIGHT);
             } else {
-                maxPossiblePeerScore += -(peerManhattan * DISTANCE_WEIGHT) - (peerInv * INVENTORY_WEIGHT);
+                maxPossiblePeerScore += -(peerManhattan * DISTANCE_WEIGHT) - (peer.inv * INVENTORY_WEIGHT);
             }
 
             // Skip expensive A* calculation if absolute best-case scenario
             // is still worse than my actual score
             if (maxPossiblePeerScore < myScore) continue;
 
-            double rawPeerDist = this.getStandardizedDistance(peerX, peerY, targetX, targetY);
+            double rawPeerDist = this.getStandardizedDistance(peer.x, peer.y, targetX, targetY);
             if (rawPeerDist == Double.MAX_VALUE) continue;
             int peerDist = (int) rawPeerDist;
 
@@ -866,9 +871,9 @@ public abstract class TWBaseAgent extends TWAgent {
 
             int peerScore = BASE_SCORE_OFFSET - peerZonePenalty + clusterBonus;
             if (action == TWAction.PUTDOWN) {
-                peerScore += -(peerDist * DISTANCE_WEIGHT) + (peerInv * INVENTORY_WEIGHT);
+                peerScore += -(peerDist * DISTANCE_WEIGHT) + (peer.inv * INVENTORY_WEIGHT);
             } else {
-                peerScore += -(peerDist * DISTANCE_WEIGHT) - (peerInv * INVENTORY_WEIGHT);
+                peerScore += -(peerDist * DISTANCE_WEIGHT) - (peer.inv * INVENTORY_WEIGHT);
             }
 
             if (peerSlack != Integer.MAX_VALUE) {
@@ -881,7 +886,7 @@ public abstract class TWBaseAgent extends TWAgent {
                 double myDist = getStandardizedDistance(this.getX(), this.getY(), targetX, targetY);
                 if (rawPeerDist < myDist) return false;
                 else if (rawPeerDist == myDist) {
-                    if (peerName.compareTo(this.getName()) < 0) return false;
+                    if (peer.name.compareTo(this.getName()) < 0) return false;
                 }
             }
         }
@@ -896,25 +901,15 @@ public abstract class TWBaseAgent extends TWAgent {
      * @return True if the move should be aborted to yield.
      */
     protected boolean shouldYieldMove(int nextX, int nextY, ArrayList<Message> peerMessages) {
-        for (Message msg : peerMessages) {
-            String content = msg.getMessage();
-            int firstSemi = content.indexOf(';');
-            String statusPart = (firstSemi == -1) ? content : content.substring(0, firstSemi);
-            String[] parts = statusPart.split(":");
-
-            if (!parts[0].equals("STATUS")) continue;
-
-            String peerName = parts[1];
-            if (peerName.equals(this.getName())) continue;
-
-            int peerX = Integer.parseInt(parts[2]);
-            int peerY = Integer.parseInt(parts[3]);
+        for (PeerState peer : currentPeerStates) {
+            if (peer.name.equals(this.getName())) continue;
 
             // Rule 1: Don't walk into a cell currently occupied by anyone
-            if (peerX == nextX && peerY == nextY) return true;
+            if (peer.x == nextX && peer.y == nextY) return true;
+
             // Rule 2: "Bubble of Authority"
-            if (peerName.compareTo(this.getName()) < 0) {
-                if (Math.abs(peerX - nextX) + Math.abs(peerY - nextY) <= 1) return true;
+            if (peer.name.compareTo(this.getName()) < 0) {
+                if (Math.abs(peer.x - nextX) + Math.abs(peer.y - nextY) <= 1) return true;
             }
         }
         return false;
