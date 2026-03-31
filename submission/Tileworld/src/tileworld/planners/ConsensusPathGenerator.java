@@ -51,7 +51,7 @@ public class ConsensusPathGenerator implements TWPathGenerator {
         Node startNode = nodes[sx][sy];
         startNode.cost = 0;
         startNode.depth = 0;
-        startNode.heuristic = getCost(sx, sy, tx, ty);
+        startNode.heuristic = getHeuristic(sx, sy, sx, sy, tx, ty);
         startNode.openSearchId = currentSearchId;
 
         open.clear();
@@ -92,7 +92,7 @@ public class ConsensusPathGenerator implements TWPathGenerator {
                         boolean isNew = !inOpenList(neighbour) && !inClosedList(neighbour);
                         if (isNew || nextStepCost < neighbour.cost) {
                             neighbour.cost = nextStepCost;
-                            if (isNew) neighbour.heuristic = getCost(xp, yp, tx, ty);
+                            if (isNew) neighbour.heuristic = getHeuristic(sx, sy, xp, yp, tx, ty);
 
                             neighbour.setParent(current);
                             neighbour.openSearchId = currentSearchId; // Mark as in-queue
@@ -121,11 +121,29 @@ public class ConsensusPathGenerator implements TWPathGenerator {
     private void addToClosed(Node node) { node.closedSearchId = currentSearchId; }
     private boolean inClosedList(Node node) { return node.closedSearchId == currentSearchId; }
 
-    public double getCost(int currentX, int currentY, int goalX, int goalY) {
-        // Use multiplication instead of Math.pow for faster calculations
-        int dx = goalX - currentX;
-        int dy = goalY - currentY;
-        return Math.sqrt(dx * dx + dy * dy);
+    /**
+     * Manhattan Distance with a Cross-Product Tie-Breaker.
+     * Uses fast primitive math to force agents to hug the direct line-of-sight
+     * diagonal, ensuring agents with different starting points take parallel,
+     * non-overlapping paths.
+     */
+    private double getHeuristic(int startX, int startY, int currentX, int currentY, int goalX, int goalY) {
+        // Base Manhattan Distance
+        double h = Math.abs(goalX - currentX) + Math.abs(goalY - currentY);
+
+        // Cross-Product Tie-Breaker
+        double dx1 = currentX - goalX;
+        double dy1 = currentY - goalY;
+        double dx2 = startX - goalX;
+        double dy2 = startY - goalY;
+
+        double cross = Math.abs((dx1 * dy2) - (dx2 * dy1));
+
+        // Guarantee the penalty is always strictly < 1.0 by scaling it against
+        // the absolute maximum possible cross-product of the current map.
+        double multiplier = 1.0 / (this.xDim * this.yDim);
+
+        return h + (cross * multiplier);
     }
 
     /** Wrapper to keep the PriorityQueue heap structure safe */
