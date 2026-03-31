@@ -119,12 +119,21 @@ If you are looking to improve the agent's performance, the architecture exposes 
 
 ## 6. Simulation Results
 
-The table below outlines the average rewards achieved across 2 runs (of 10 full-length simulations) of [`TileworldMain.java`](Tileworld/src/tileworld/TileworldMain.java) for both predefined environment configurations using instances of [TWAgent1.java](Tileworld/src/tileworld/agent/TWAgent1.java), [TWAgent2.java](Tileworld/src/tileworld/agent/TWAgent2.java), [TWAgent3.java](Tileworld/src/tileworld/agent/TWAgent3.java), [TWAgent4.java](Tileworld/src/tileworld/agent/TWAgent4.java), [TWAgent5.java](Tileworld/src/tileworld/agent/TWAgent5.java), and [TWAgent6.java](Tileworld/src/tileworld/agent/TWAgent6.java).
+The following results summarize the average rewards achieved across 10 independent runs for each predefined environment configuration. Each run represents the mean performance of a 10-simulation batch featuring the full agent ensemble ([`TWAgent1.java`](Tileworld/src/tileworld/agent/TWAgent1.java) through [`TWAgent6.java`](Tileworld/src/tileworld/agent/TWAgent6.java)).
 
-| Configuration File | Map Size | Object Spawns/Step | Object Lifetime | Run 1 Reward | Run 2 Reward | Average Reward |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| [`Parameters.java`](Tileworld/src/tileworld/Parameters.java) | 50x50 | 0.2 (Low) | 100 (High) | 633.2 | 614.8 | 624.0 |
-| [`Parameters2.java`](Tileworld/src/tileworld/Parameters2.java) | 80x80 | 2.0 (High) | 30 (Low) | 916.2 | 906.0 | 911.1 |
+### Environment Configurations
+
+* **Config 1** ([`Parameters.java`](Tileworld/src/tileworld/Parameters.java)): 50x50 Map | 0.2 Spawn Rate (Low) | 100 Lifetime (High)
+* **Config 2** ([`Parameters2.java`](Tileworld/src/tileworld/Parameters2.java)): 80x80 Map | 2.0 Spawn Rate (High) | 30 Lifetime (Low)
+
+### Performance Metrics
+
+| Config | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | AVG |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Config 1** | 650.6 | 641.4 | 647.4 | 638.1 | 656.2 | 642.5 | 644.5 | 651.9 | 649.9 | 646.8 | **646.9** |
+| **Config 2** | 931.3 | 919.2 | 929.5 | 908.8 | 906.9 | 892.3 | 917.0 | 906.4 | 918.3 | 929.1 | **915.9** |
+
+**Note:** Columns **R1–R10** represent the average reward of a 10-simulation batch. The **AVG** column provides the grand mean across all 100 total simulations per configuration.
 
 ## 7. Notes & Setup
 
