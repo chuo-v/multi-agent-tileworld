@@ -3,6 +3,7 @@ package tileworld.planners;
 import java.util.PriorityQueue;
 import tileworld.agent.ConsensusMemory;
 import tileworld.agent.TWAgent;
+import tileworld.agent.TWBaseAgent;
 import tileworld.environment.TWEnvironment;
 
 /**
@@ -20,6 +21,7 @@ public class ConsensusPathGenerator implements TWPathGenerator {
     private PriorityQueue<SearchEntry> open = new PriorityQueue<>();
     private final int xDim, yDim; // Dimensions cached for speed
     private int maxSearchDistance;
+    private final double peerAvoidancePenalty;
     private Node[][] nodes;
     private TWAgent agent;
 
@@ -28,6 +30,12 @@ public class ConsensusPathGenerator implements TWPathGenerator {
         this.xDim = map.getxDimension();
         this.yDim = map.getyDimension();
         this.maxSearchDistance = maxSearchDistance;
+
+        // Use an inverse-scaling formula to set the A* peer avoidance penalty.
+        // On small, dense maps, a higher penalty is required to force agents to route around each other.
+        // On large, sparse maps, natural travel distances disperse agents, so a lower penalty is sufficient.
+        double sqrtMapSize = Math.sqrt(map.getxDimension() * map.getyDimension());
+        this.peerAvoidancePenalty = Math.min(Math.max(2.0, 120 / sqrtMapSize), 4.0);
 
         nodes = new Node[xDim][yDim];
         for (int x = 0; x < xDim; x++) {
@@ -86,6 +94,21 @@ public class ConsensusPathGenerator implements TWPathGenerator {
                     // Custom check: !memory.isConsensusBlocked (Ignores private sensors)
                     if (xp >= 0 && xp < xDim && yp >= 0 && yp < yDim && !memory.isConsensusBlocked(xp, yp)) {
                         double nextStepCost = current.cost + 1.0;
+
+                        // Query the agent to see if a peer is standing in this cell.
+                        // If true, mathematically treat it as a detour.
+                        // A* will naturally curve around traffic jams.
+                        if (agent instanceof TWBaseAgent) {
+                            TWBaseAgent baseAgent = (TWBaseAgent) agent;
+
+                            // Disable penalties during survival routes
+                            if (!baseAgent.isFuelStation(tx, ty)) {
+                                if (baseAgent.hasPeerAt(xp, yp)) {
+                                    nextStepCost += this.peerAvoidancePenalty;
+                                }
+                            }
+                        }
+
                         Node neighbour = nodes[xp][yp];
 
                         // Only update if the node is brand new or we found a shorter path

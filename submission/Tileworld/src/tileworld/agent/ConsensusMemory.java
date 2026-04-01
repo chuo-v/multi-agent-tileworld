@@ -691,6 +691,8 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
                             consensusTiles.remove(pos);
                         } else if (objType.equals("HOLE")) {
                             consensusHoles.remove(pos);
+                        } else if (objType.equals("OBSTACLE")) {
+                            consensusObstacles.remove(pos);
                         }
                     }
                 } catch (Exception e) {}

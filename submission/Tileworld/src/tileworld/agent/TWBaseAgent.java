@@ -681,6 +681,23 @@ public abstract class TWBaseAgent extends TWAgent {
     }
 
     /**
+     * Checks if a known peer is currently standing at the specified coordinates.
+     * Used by the path generator to apply soft penalties for traffic dispersal,
+     * ensuring agents organically route around each other without breaking encapsulation.
+     * * @param x The X coordinate to check.
+     * @param y The Y coordinate to check.
+     * @return True if a peer occupies the cell, false otherwise.
+     */
+    public boolean hasPeerAt(int x, int y) {
+        for (PeerState peer : currentPeerStates) {
+            if (peer.x == x && peer.y == y) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Returns a random cardinal direction (N, S, E, W), explicitly excluding Z.
      * * @return A random TWDirection.
      */
@@ -712,6 +729,18 @@ public abstract class TWBaseAgent extends TWAgent {
      */
     protected Int2D getFuelStationFromConsensusMemory() {
         return this.consensusMemory.getConsensusFuelStation();
+    }
+
+    /**
+     * Checks if the given coordinates match the team's known fuel station.
+     * Used to disable A* traffic penalties during emergency survival routing.
+     * * @param x The X coordinate to check.
+     * @param y The Y coordinate to check.
+     * @return True if it is the fuel station, false otherwise.
+     */
+    public boolean isFuelStation(int x, int y) {
+        Int2D station = consensusMemory.getConsensusFuelStation();
+        return station != null && station.x == x && station.y == y;
     }
 
     /**
