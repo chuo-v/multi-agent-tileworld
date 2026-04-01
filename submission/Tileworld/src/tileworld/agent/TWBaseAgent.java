@@ -723,7 +723,7 @@ public abstract class TWBaseAgent extends TWAgent {
     private int getFuelSafetyBuffer(String agentName) {
         int idOffset = 0;
         try {
-            idOffset = Integer.parseInt(agentName.replaceAll("\\D+","")) * 15;
+            idOffset = Integer.parseInt(agentName.replaceAll("\\D+","")) * 8;
         } catch (Exception e) {
             idOffset = 0; // Fallback
         }
