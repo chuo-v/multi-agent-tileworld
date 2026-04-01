@@ -123,15 +123,20 @@ The following results summarize the average rewards achieved across 10 independe
 
 ### Environment Configurations
 
+**Provided Configurations**
 * **Config 1** ([`Parameters.java`](Tileworld/src/tileworld/Parameters.java)): 50x50 Map | 0.2 Spawn Rate (Low) | 100 Lifetime (High)
 * **Config 2** ([`Parameters2.java`](Tileworld/src/tileworld/Parameters2.java)): 80x80 Map | 2.0 Spawn Rate (High) | 30 Lifetime (Low)
+
+**Internal Configurations**
+* **Config 3** ([`InternalParameters1.java`](Tileworld/src/tileworld/InternalParameters1.java)): 20x20 Map | 0.03 Spawn Rate (Low) | 40 Lifetime (Low)
 
 ### Performance Metrics
 
 | Config | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | AVG |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Config 1** | 655.0 | 652.5 | 648.8 | 649.5 | 655.2 | 638.7 | 656.1 | 654.6 | 653.5 | 657.7 | **652.1** |
-| **Config 2** | 944.1 | 958.3 | 949.1 | 944.2 | 953.8 | 944.3 | 944.0 | 934.4 | 939.4 | 938.1 | **945.0** |
+| **Config 1** | 654.0 | 662.6 | 654.7 | 661.1 | 661.2 | 649.3 | 658.3 | 648.1 | 654.6 | 652.4 | **655.6** |
+| **Config 2** | 951.3 | 955.2 | 937.9 | 969.2 | 954.9 | 934.7 | 945.9 | 940.2 | 949.7 | 942.7 | **948.2** |
+| **Config 3** | 1384.2 | 1387.6 | 1359.8 | 1354.1 | 1376.6 | 1368.5 | 1376.1 | 1376.2 | 1379.4 | 1381.1 | **1374.4** |
 
 **Note:** Columns **R1–R10** represent the average reward of a 10-simulation batch. The **AVG** column provides the grand mean across all 100 total simulations per configuration.
 
