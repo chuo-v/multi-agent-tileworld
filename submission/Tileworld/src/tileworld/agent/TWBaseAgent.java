@@ -72,9 +72,6 @@ public abstract class TWBaseAgent extends TWAgent {
     /** The specific entity the agent is currently assigned to monitor. */
     protected TWEntity monitoringTarget = null;
 
-    /** Safety buffer added to the fuel threshold to account for dynamic obstacles or waiting time. */
-    private final int fuelSafetyBuffer;
-
     /** Flag tracking if the last execution step threw a CellBlockedException. */
     private boolean lastActionFailed = false;
 
@@ -102,19 +99,6 @@ public abstract class TWBaseAgent extends TWAgent {
         // CRITICAL: Overwrite the memory initialized in super() with our Custom Memory
         this.memory = new ConsensusMemory(this, env.schedule, env.getxDimension(), env.getyDimension());
         this.consensusMemory = (ConsensusMemory) this.memory;
-
-        // --- STAGGERED FUELING PIT STOP IMPLEMENTATION ---
-        int idOffset = 0;
-        try {
-            // Extract the number from the agent's name (e.g., "Agent1" -> 1)
-            // Multiply by 15 to space out their return to the fuel station
-            idOffset = Integer.parseInt(name.replaceAll("\\D+","")) * 15;
-        } catch (Exception e) {
-            idOffset = 0; // Fallback 
-        }
-
-        // Add the offset so agents refuel in staggered waves
-        this.fuelSafetyBuffer = (int)(0.4 * (env.getxDimension() + env.getyDimension())) + idOffset;
     }
 
     // --- CORE BEHAVIOR ---
@@ -731,38 +715,68 @@ public abstract class TWBaseAgent extends TWAgent {
     }
 
     /**
-     * Calculates the agent's current fuel safety threshold based on its coordinates.
-     * * @return Minimum required fuel level.
+     * Calculates the dynamic fuel safety buffer for a specific agent.
+     * Extracts the numeric ID from the agent's name to stagger refueling pit stops.
+     * * @param agentName The name of the agent to calculate the buffer for.
+     * @return The computed safety buffer.
+     */
+    private int getFuelSafetyBuffer(String agentName) {
+        int idOffset = 0;
+        try {
+            idOffset = Integer.parseInt(agentName.replaceAll("\\D+","")) * 15;
+        } catch (Exception e) {
+            idOffset = 0; // Fallback
+        }
+        return (int)(0.4 * (this.getEnvironment().getxDimension() + this.getEnvironment().getyDimension())) + idOffset;
+    }
+
+    /**
+     * Calculates the calling agent's own fuel safety threshold.
+     *
+     * @return The minimum fuel level required for the current agent to safely
+     * navigate back to the fuel station.
      */
     protected int getFuelSafetyThreshold() {
-        return calculateFuelSafetyThreshold(this.getX(), this.getY());
+        return calculateFuelSafetyThreshold(this.getName(), this.getX(), this.getY());
     }
 
     /**
-     * Calculates a peer's fuel safety threshold based on their coordinates.
-     * * @param peerX X coordinate of peer.
-     * @param peerY Y coordinate of peer.
-     * @return Minimum required fuel level for peer.
+     * Calculates a peer agent's fuel safety threshold based on their identity
+     * and current location. This is used by the implicit coordination system
+     * to predict if a peer is about to abandon a target to refuel.
+     *
+     * @param peerName The unique name of the peer agent (used to determine their
+     * specific staggered idOffset buffer).
+     * @param peerX    The peer agent's current X-coordinate.
+     * @param peerY    The peer agent's current Y-coordinate.
+     * @return The minimum fuel level the peer agent is mathematically expected to maintain.
      */
-    protected int getPeerFuelSafetyThreshold(int peerX, int peerY) {
-        return calculateFuelSafetyThreshold(peerX, peerY);
+    protected int getPeerFuelSafetyThreshold(String peerName, int peerX, int peerY) {
+        return calculateFuelSafetyThreshold(peerName, peerX, peerY);
     }
 
     /**
-     * Helper method to determine fuel thresholds via A* pathing distance.
-     * * @param x The X coordinate to calculate from.
-     * @param y The Y coordinate to calculate from.
-     * @return The computed threshold.
+     * Internal helper to compute a fuel threshold by combining A* distance to
+     * the station with a dynamic, name-based safety buffer.
+     *
+     * @param agentName The name of the agent, used to fetch the unique 15-step
+     * staggered buffer to prevent simultaneous refueling clogs.
+     * @param x         The X-coordinate starting point for the pathfinding distance.
+     * @param y         The Y-coordinate starting point for the pathfinding distance.
+     * @return The computed fuel threshold, capped to ensure an agent can always
+     * physically satisfy the check and leave the station after refueling.
      */
-    private int calculateFuelSafetyThreshold(int x, int y) {
+    private int calculateFuelSafetyThreshold(String agentName, int x, int y) {
         Int2D station = consensusMemory.getConsensusFuelStation();
         int defaultFuelCapacity = 500;
         int computedThreshold = 0;
 
+        int buffer = getFuelSafetyBuffer(agentName);
+
         if (station.x != -1) {
             double dist = getStandardizedDistance(x, y, station.x, station.y);
             if (dist != Double.MAX_VALUE) {
-                computedThreshold = (int)dist + this.fuelSafetyBuffer;
+                computedThreshold = (int)dist + buffer;
             } else {
                 computedThreshold = this.getEnvironment().getxDimension() + this.getEnvironment().getyDimension();
             }
@@ -832,7 +846,7 @@ public abstract class TWBaseAgent extends TWAgent {
         for (PeerState peer : currentPeerStates) {
             if (peer.name.equals(this.getName())) continue;
 
-            if (peer.fuel < getPeerFuelSafetyThreshold(peer.x, peer.y)) continue;
+            if (peer.fuel < getPeerFuelSafetyThreshold(peer.name, peer.x, peer.y)) continue;
             if (action == TWAction.PICKUP && peer.inv >= 3) continue;
             if (action == TWAction.PUTDOWN && peer.inv == 0) continue;
 
