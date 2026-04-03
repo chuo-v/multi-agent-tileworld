@@ -207,17 +207,18 @@ public abstract class TWBaseAgent extends TWAgent {
         int cx = this.getX();
         int cy = this.getY();
 
+        TWEntity obj = this.consensusMemory.getObservedObject(cx, cy);
+
         // Am I standing on a Tile and have inventory space?
-        if (this.carriedTiles.size() < 3 && consensusMemory.getConsensusTiles().containsKey(new Int2D(cx, cy))) {
+        if (this.carriedTiles.size() < 3 && obj instanceof TWTile) {
             int score = standardizedScoreForTile(cx, cy);
-            // Verify we are the rightful claimant (resolves ties if another agent is adjacent)
             if (score != Integer.MIN_VALUE && isBestCandidate(cx, cy, score, this.getEnvironment().getMessages(), TWAction.PICKUP)) {
                 return new TWThought(TWAction.PICKUP, TWDirection.Z);
             }
         }
 
         // Am I standing on a Hole and have a tile to drop?
-        if (this.carriedTiles.size() > 0 && consensusMemory.getConsensusHoles().containsKey(new Int2D(cx, cy))) {
+        if (this.carriedTiles.size() > 0 && obj instanceof TWHole) {
             int score = standardizedScoreForHole(cx, cy);
             if (score != Integer.MIN_VALUE && isBestCandidate(cx, cy, score, this.getEnvironment().getMessages(), TWAction.PUTDOWN)) {
                 return new TWThought(TWAction.PUTDOWN, TWDirection.Z);
@@ -1055,7 +1056,8 @@ public abstract class TWBaseAgent extends TWAgent {
             switch (thought.getAction()) {
                 case MOVE: this.move(thought.getDirection()); break;
                 case PICKUP:
-                    Object tile = this.getEnvironment().getObjectGrid().get(this.getX(), this.getY());
+                    TWEntity tile = this.consensusMemory.getObservedObject(this.getX(), this.getY());
+
                     if (tile instanceof TWTile) {
                         this.pickUpTile((TWTile) tile);
                         this.consensusMemory.getConsensusTiles().remove(new Int2D(this.getX(), this.getY()));
@@ -1067,7 +1069,8 @@ public abstract class TWBaseAgent extends TWAgent {
                     }
                     break;
                 case PUTDOWN:
-                    Object hole = this.getEnvironment().getObjectGrid().get(this.getX(), this.getY());
+                    TWEntity hole = this.consensusMemory.getObservedObject(this.getX(), this.getY());
+
                     if (hole instanceof TWHole) {
                         this.putTileInHole((TWHole) hole);
                         this.consensusMemory.getConsensusHoles().remove(new Int2D(this.getX(), this.getY()));
