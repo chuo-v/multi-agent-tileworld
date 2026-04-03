@@ -20,13 +20,25 @@ public class TWAgent6 extends TWBaseAgent {
     private final double SWITCHING_THRESHOLD = 1.2; // 20% loyalty bonus
     private final int WINDOW_SIZE = 5; // Search for 5x5 dark areas
 
+    // Cached parameter for opportunistic sweeping
+    private final int opportunisticSweepThreshold;
+
     public TWAgent6(String name, int xpos, int ypos, TWEnvironment env, double fuelLevel) {
         super(name, xpos, ypos, env, fuelLevel);
+
+        // Calculate and cache the scale-appropriate threshold for opportunistic sweeping
+        this.opportunisticSweepThreshold = calculateSweepThreshold(env.getxDimension(), env.getyDimension());
     }
 
     @Override
     protected TWThought executeWorkerLogic() {
         ConsensusMemory mem = (ConsensusMemory) this.getMemory();
+
+        // Opportunistically sweep nearby targets before committing to a dark area search
+        TWThought vacuumThought = executeExpandedVacuumSynergy();
+        if (vacuumThought != null) {
+            return vacuumThought;
+        }
 
         // 1 & 2. Scan the map for the best potential dark area
         ScoredArea bestNewArea = findBestAreaOnMap(mem);
@@ -100,7 +112,7 @@ public class TWAgent6 extends TWBaseAgent {
 
     private double calculateScore(int centerX, int centerY, int darkCount) {
         ConsensusMemory mem = (ConsensusMemory) this.getMemory();
-        double distToMe = getStandardizedDistance(getX(), getY(), centerX, centerY);
+        double distToMe = getEuclideanDistance(getX(), getY(), centerX, centerY);
         
         // 1. Get Peer Positions directly from ConsensusMemory!
         // This replaces the expensive Grid Scan we tried earlier.
@@ -108,7 +120,7 @@ public class TWAgent6 extends TWBaseAgent {
         
         double peerPenalty = 0;
         for (Int2D peerPos : peerPositions) {
-            double distToPeer = getStandardizedDistance(peerPos.x, peerPos.y, centerX, centerY);
+            double distToPeer = getEuclideanDistance(peerPos.x, peerPos.y, centerX, centerY);
 
             // If the peer is closer to this dark patch than the Vanguard, penalize heavily.
             if (distToPeer < distToMe) {
@@ -141,7 +153,81 @@ public class TWAgent6 extends TWBaseAgent {
     /**
      * Simple Euclidean distance formula: sqrt((x1-x2)^2 + (y1-y2)^2)
      */
-    protected double getStandardizedDistance(int x1, int y1, int x2, int y2) {
+    private double getEuclideanDistance(int x1, int y1, int x2, int y2) {
         return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2));
+    }
+
+    /**
+     * Calculates the threshold for opportunistic sweeping based on map dimensions.
+     * Uses an adaptive multiplier to ensure scale-appropriate behavior based on empirical data.
+     */
+    private int calculateSweepThreshold(int width, int height) {
+        int mapSum = width + height;
+
+        // Empirically derived multipliers based on map size.
+        // Small maps afford high distraction; large maps require strict scouting focus.
+        double opportunisticMultiplier;
+        if (mapSum <= 60) {
+            // e.g., matches 20x20, 30x30
+            opportunisticMultiplier = 1.8;
+        } else if (mapSum <= 120) {
+            // e.g., matches 40x40, 50x50, 60x60
+            opportunisticMultiplier = 1.6;
+        } else {
+            // e.g., matches 70x70, 80x80
+            opportunisticMultiplier = 1.0;
+        }
+
+        int vacuumBoost = (int) ((mapSum / 2) * DISTANCE_WEIGHT * opportunisticMultiplier);
+
+        return AUTOMATIC_SCORE_THRESHOLD - vacuumBoost;
+    }
+
+    /**
+     * Evaluates targets using an expanded scoring threshold to replicate a massive
+     * collection radius. This allows the agent to act as an opportunistic sweeper
+     * on its way to dark patches.
+     * * @return TWThought to execute a pickup/putdown, or null if no valid target is found.
+     */
+    private TWThought executeExpandedVacuumSynergy() {
+        ConsensusMemory mem = (ConsensusMemory) this.getMemory();
+        Int2D bestTarget = null;
+        int bestScore = Integer.MIN_VALUE;
+        TWAction bestAction = null;
+
+
+        if (this.carriedTiles.size() < 3) {
+            for (Int2D tilePos : mem.getConsensusTiles().keySet()) {
+                int score = standardizedScoreForTile(tilePos.x, tilePos.y);
+                if (score > opportunisticSweepThreshold && score > bestScore) {
+                    if (isBestCandidate(tilePos.x, tilePos.y, score, this.getEnvironment().getMessages(), TWAction.PICKUP)) {
+                        bestScore = score;
+                        bestTarget = tilePos;
+                        bestAction = TWAction.PICKUP;
+                    }
+                }
+            }
+        }
+
+        if (this.carriedTiles.size() > 0) {
+            for (Int2D holePos : mem.getConsensusHoles().keySet()) {
+                int score = standardizedScoreForHole(holePos.x, holePos.y);
+                if (score > opportunisticSweepThreshold && score > bestScore) {
+                    if (isBestCandidate(holePos.x, holePos.y, score, this.getEnvironment().getMessages(), TWAction.PUTDOWN)) {
+                        bestScore = score;
+                        bestTarget = holePos;
+                        bestAction = TWAction.PUTDOWN;
+                    }
+                }
+            }
+        }
+
+        // If a target was found in the expanded vacuum radius, execute it immediately
+        if (bestTarget != null) {
+            this.explorationTarget = null;
+            return executePathTo(bestTarget.x, bestTarget.y, bestAction);
+        }
+
+        return null;
     }
 }
