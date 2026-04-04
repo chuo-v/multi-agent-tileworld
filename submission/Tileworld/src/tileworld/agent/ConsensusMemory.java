@@ -364,23 +364,27 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
     public Int2D getNearestUnexplored(int startX, int startY, boolean restrictToZone) {
         if (isMapFullyExplored()) return null;
 
-        // Pass 1: Try to find an unexplored target in the PADDED zone (avoids walking to borders)
-        Int2D target = searchUnexploredBFS(startX, startY, restrictToZone, true);
+        Int2D target = searchUnexploredBFS(startX, startY, restrictToZone);
         if (target != null) return target;
 
-        // Pass 2: Fallback to the strict zone (to catch corners/edges blocked by obstacles)
-        return searchUnexploredBFS(startX, startY, restrictToZone, false);
+        // Fallback: If the assigned zone is 100% explored, help the rest of the team
+        if (restrictToZone) {
+            return searchUnexploredBFS(startX, startY, false);
+        }
+
+        return null;
     }
 
     /**
      * The internal BFS loop for resolving unexplored cells.
+     * Uses a Level-Synchronous approach with a Centrifugal Tie-Breaker to systematically
+     * pull the wavefront toward the zone borders without incurring commute penalties.
      * * @param startX         Start X.
      * @param startY         Start Y.
-     * @param restrictToZone Apply zone bounding box.
-     * @param usePadding     Apply padded bounding box to prevent border-hugging.
-     * @return Coordinates of a valid unexplored cell.
+     * @param restrictToZone Whether to filter candidates by the assigned zone.
+     * @return Coordinates of the nearest valid unexplored cell, or null if none found.
      */
-    private Int2D searchUnexploredBFS(int startX, int startY, boolean restrictToZone, boolean usePadding) {
+    private Int2D searchUnexploredBFS(int startX, int startY, boolean restrictToZone) {
         int xDim = me.getEnvironment().getxDimension();
         int yDim = me.getEnvironment().getyDimension();
 
@@ -391,50 +395,69 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
         queue.add(startNode);
         visitedBFS[startX][startY] = true;
 
-        // Calculate the boundary constraint for this BFS pass
-        Rectangle searchZone = assignedZone;
-        if (restrictToZone && assignedZone != null && usePadding) {
-            int pad = 3; // default sensor range
-            int ix = assignedZone.x + pad;
-            int iy = assignedZone.y + pad;
-            int iw = assignedZone.width - (2 * pad);
-            int ih = assignedZone.height - (2 * pad);
-
-            // Only use padded zone if it's physically possible (width/height > 0)
-            if (iw > 0 && ih > 0) {
-                searchZone = new Rectangle(ix, iy, iw, ih);
-            }
-        }
+        // Stores all valid targets found at the exact same travel depth
+        List<Int2D> currentLayerCandidates = new ArrayList<>();
 
         while (!queue.isEmpty()) {
-            Int2D current = queue.poll();
+            int layerSize = queue.size();
+            currentLayerCandidates.clear();
 
-            // Found a target!
-            if (!exploredGrid[current.x][current.y]) {
-                // Constraint Check: Is this target in our defined search zone?
-                if (restrictToZone && searchZone != null) {
-                    if (searchZone.contains(current.x, current.y)) {
-                        return current;
+            // Process all nodes at the current BFS depth level
+            for (int i = 0; i < layerSize; i++) {
+                Int2D current = queue.poll();
+
+                if (!exploredGrid[current.x][current.y]) {
+                    if (restrictToZone && assignedZone != null) {
+                        if (assignedZone.contains(current.x, current.y)) {
+                            currentLayerCandidates.add(current);
+                        }
+                    } else {
+                        currentLayerCandidates.add(current);
                     }
-                } else {
-                    return current;
+                }
+
+                // Always queue the neighbors for the next depth layer
+                int[] dx = {0, 0, 1, -1};
+                int[] dy = {1, -1, 0, 0};
+
+                for (int d = 0; d < 4; d++) {
+                    int nx = current.x + dx[d];
+                    int ny = current.y + dy[d];
+
+                    if (nx >= 0 && nx < xDim && ny >= 0 && ny < yDim && !visitedBFS[nx][ny]) {
+                        // Respect obstacles during the search
+                        if (!isConsensusBlocked(nx, ny)) {
+                            visitedBFS[nx][ny] = true;
+                            queue.add(new Int2D(nx, ny));
+                        }
+                    }
                 }
             }
 
-            int[] dx = {0, 0, 1, -1};
-            int[] dy = {1, -1, 0, 0};
+            // Tie-Breaker: If targets exist at this depth, pick the one closest to the zone border
+            // This ensures we stop expanding the BFS the moment we hit the nearest frontier.
+            if (!currentLayerCandidates.isEmpty()) {
+                Int2D bestTarget = null;
+                int minBorderDist = Integer.MAX_VALUE;
 
-            for (int i = 0; i < 4; i++) {
-                int nx = current.x + dx[i];
-                int ny = current.y + dy[i];
+                // Always use the true assigned zone for the mathematical border pull
+                Rectangle borderRef = (assignedZone != null) ? assignedZone : new Rectangle(0, 0, xDim, yDim);
 
-                if (nx >= 0 && nx < xDim && ny >= 0 && ny < yDim && !visitedBFS[nx][ny]) {
-                    // Optimization: Do not traverse through obstacles
-                    if (!isConsensusBlocked(nx, ny)) {
-                        visitedBFS[nx][ny] = true;
-                        queue.add(new Int2D(nx, ny));
+                for (Int2D candidate : currentLayerCandidates) {
+                    int distLeft = candidate.x - borderRef.x;
+                    int distRight = (borderRef.x + borderRef.width - 1) - candidate.x;
+                    int distTop = candidate.y - borderRef.y;
+                    int distBottom = (borderRef.y + borderRef.height - 1) - candidate.y;
+
+                    // Calculate the absolute distance to the nearest edge
+                    int borderDist = Math.min(Math.min(distLeft, distRight), Math.min(distTop, distBottom));
+
+                    if (borderDist < minBorderDist) {
+                        minBorderDist = borderDist;
+                        bestTarget = candidate;
                     }
                 }
+                return bestTarget;
             }
         }
         return null;
