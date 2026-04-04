@@ -452,45 +452,58 @@ public abstract class TWBaseAgent extends TWAgent {
      */
     protected TWThought executeExploreMove() {
         boolean stationKnown = (consensusMemory.getConsensusFuelStation().x != -1);
-        boolean resetRequired = (explorationTarget == null) ||
-                                (this.getX() == explorationTarget.x && this.getY() == explorationTarget.y);
+        boolean resetRequired = false;
 
-        if (!stationKnown && !resetRequired) {
-            if (consensusMemory.isExplored(explorationTarget.x, explorationTarget.y)) {
-                resetRequired = true;
-            }
+        if (explorationTarget == null || (this.getX() == explorationTarget.x && this.getY() == explorationTarget.y)) {
+            // Reset if we reached our target
+            resetRequired = true;
+        } else if (consensusMemory.isConsensusBlocked(explorationTarget.x, explorationTarget.y)) {
+            // Reset if the target is unreachable
+            resetRequired = true;
+        } else if (!stationKnown && consensusMemory.isExplored(explorationTarget.x, explorationTarget.y)) {
+            // Only short-circuit in Phase 1 (Station Search) to create the BFS wavefront.
+            // Stop and recalculate as soon as the target is visible. This keeps the agent
+            // riding the boundary of unexplored space, maximizing sensor efficiency.
+            resetRequired = true;
         }
 
         if (resetRequired) {
             Rectangle zone = consensusMemory.getAssignedZone();
 
+            // Transitional State Fallback
+            if (zone == null) {
+                zone = new Rectangle(0, 0, this.getEnvironment().getxDimension(), this.getEnvironment().getyDimension());
+            }
+
             if (!stationKnown) {
                 // Phase 1: High Coverage (BFS)
                 explorationTarget = consensusMemory.getNearestUnexplored(this.getX(), this.getY(), true);
-            } else {
-                explorationTarget = null;
-            }
 
-            if (explorationTarget == null) {
-                if (!stationKnown) {
-                    // PHASE 1: Uniform Random (No Repulsion) to cover edges
+                // Fallback to random if BFS completely fails
+                if (explorationTarget == null) {
                     explorationTarget = generateZonedRandomLocation(zone);
                 }
-                else {
-                    // PHASE 2: Repulsive Random (Avoid Clumping)
-                    if (this.carriedTiles.size() > 0 && !consensusMemory.hasHolesInZone(zone)) {
-
-                        // Refresh sub-zone assignments based on agents' current positions
-                        consensusMemory.refreshExplorationSubZone();
-
-                        Rectangle subZone = consensusMemory.getExplorationSubZone();
-                        explorationTarget = generateZonedRandomLocation((subZone != null) ? subZone : zone);
-                    } else {
-                        explorationTarget = getRepulsiveTarget(zone);
-                    }
+            } else {
+                // Phase 2: Repulsive Radar Sweep
+                if (this.carriedTiles.size() > 0 && !consensusMemory.hasHolesInZone(zone)) {
+                    // Refresh sub-zone assignments based on agents' current positions
+                    consensusMemory.refreshExplorationSubZone();
+                    Rectangle subZone = consensusMemory.getExplorationSubZone();
+                    explorationTarget = generateZonedRandomLocation((subZone != null) ? subZone : zone);
+                } else {
+                    explorationTarget = getRepulsiveTarget(zone);
                 }
             }
         }
+
+        // Final safety net
+        if (explorationTarget == null) {
+            explorationTarget = new Int2D(
+                this.getEnvironment().random.nextInt(this.getEnvironment().getxDimension()),
+                this.getEnvironment().random.nextInt(this.getEnvironment().getyDimension())
+            );
+        }
+
         return executePathTo(explorationTarget.x, explorationTarget.y, TWAction.MOVE);
     }
 
