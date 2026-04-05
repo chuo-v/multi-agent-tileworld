@@ -508,8 +508,11 @@ public abstract class TWBaseAgent extends TWAgent {
     }
 
     /**
-     * Generates a target that maximizes the distance between this agent and its teammates.
-     * * @param zone The rectangle bounding the generation area.
+     * Generates a target that maximizes distance from teammates, but restricts the
+     * candidates to a local radius. This prevents the agent from over-committing to
+     * massive cross-zone paths, keeping it highly reactive to a dynamic environment.
+     *
+     * @param zone The rectangle bounding the generation area.
      * @return Int2D representing the selected repulsive target.
      */
     private Int2D getRepulsiveTarget(Rectangle zone) {
@@ -524,22 +527,51 @@ public abstract class TWBaseAgent extends TWAgent {
         Int2D bestTarget = null;
         double maxMinDistance = -1.0;
 
-        // Sample ~20% of the zone's total area, enforcing a minimum of 50 samples.
-        int numCandidates = Math.max(50, (int)((zone.width * zone.height) * 0.20));
+        int avgDim = (env.getxDimension() + env.getyDimension()) / 2;
+        // Apply a logarithmic curve fitted to empirical data
+        double calculatedPatrolRadiusMultiplier = (0.267 * Math.log(avgDim)) - 0.202;
+        // Clamp the multiplier to a safe operational range (0.4 to 1.2)
+        double patrolRadiusMultiplier = Math.max(0.4, Math.min(1.2, calculatedPatrolRadiusMultiplier));
+        int patrolRadius = (int)(avgDim * patrolRadiusMultiplier);
+
+        // Create a localized box around the agent, clamped to the agent's assigned zone
+        int minX = Math.max(zone.x, this.getX() - patrolRadius);
+        int maxX = Math.min(zone.x + zone.width, this.getX() + patrolRadius);
+        int minY = Math.max(zone.y, this.getY() - patrolRadius);
+        int maxY = Math.min(zone.y + zone.height, this.getY() + patrolRadius);
+
+        int localWidth = maxX - minX;
+        int localHeight = maxY - minY;
+
+        // If the agent is standing completely outside its assigned zone
+        // (e.g., right after the Phase 2 switch), the overlap will be negative.
+        // Fall back to the global zone so the agent commutes to its jurisdiction.
+        if (localWidth <= 0 || localHeight <= 0) {
+            return generateZonedRandomLocation(zone);
+        }
+
+        Rectangle localZone = new Rectangle(minX, minY, localWidth, localHeight);
+
+        int localArea = localZone.width * localZone.height;
+        int numCandidates = Math.max(20, 50 - (localArea / 100));
 
         for (int i = 0; i < numCandidates; i++) {
-            Int2D cand = generateZonedRandomLocation(zone);
+            // Generate candidates specifically within the local bounding box
+            Int2D cand = generateZonedRandomLocation(localZone);
             double minD = Double.MAX_VALUE;
+
             for (Int2D other : others) {
                 double d = Math.abs(cand.x - other.x) + Math.abs(cand.y - other.y);
                 if (d < minD) minD = d;
             }
+
             if (minD > maxMinDistance) {
                 maxMinDistance = minD;
                 bestTarget = cand;
             }
         }
-        return (bestTarget != null) ? bestTarget : generateZonedRandomLocation(zone);
+
+        return (bestTarget != null) ? bestTarget : generateZonedRandomLocation(localZone);
     }
 
     /**
