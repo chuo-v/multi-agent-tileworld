@@ -154,7 +154,7 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
 
         // Defaults
         this.consensusFuelStation = new Int2D(-1, -1);
-        this.objectLifetime = 20; // Conservative estimate
+        this.objectLifetime = 10; // Conservative estimate
     }
 
     // --- ZONING LOGIC ---
