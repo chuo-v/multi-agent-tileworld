@@ -43,6 +43,8 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
     private TWAgentPercept[][] privateShadow;
     /** Grid tracking the simulation time a cell was last observed. */
     private double[][] lastObservationGrid;
+    /** Grid tracking obstacles to provide zero-allocation, O(1) lookups during A* pathfinding. */
+    private boolean[][] consensusBlockedGrid;
     /** Grid tracking if the agent was physically present when an object spawned. */
     private boolean[][] witnessedCreationGrid;
     /** Grid tracking which coordinates the agent has personally explored. */
@@ -115,6 +117,7 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
 
         this.privateShadow = new TWAgentPercept[x][y]; // Initialize Shadow Layer
         this.lastObservationGrid = new double[x][y];
+        this.consensusBlockedGrid = new boolean[x][y];
         this.witnessedCreationGrid = new boolean[x][y];
         this.exploredGrid = new boolean[x][y];
 
@@ -546,6 +549,7 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
                     }
                     if (consensusObstacles.containsKey(pos)) {
                         consensusObstacles.remove(pos);
+                        consensusBlockedGrid[x][y] = false;
                         queueRemoval("OBSTACLE", x, y);
                     }
                 }
@@ -680,6 +684,7 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
                         consensusHoles.put(new Int2D(Integer.parseInt(data[1]), Integer.parseInt(data[2])), Integer.parseInt(data[3]));
                     } else if (type.equals("OBSTACLE")) {
                         consensusObstacles.put(new Int2D(Integer.parseInt(data[1]), Integer.parseInt(data[2])), Integer.parseInt(data[3]));
+                        consensusBlockedGrid[Integer.parseInt(data[1])][Integer.parseInt(data[2])] = true;
                     } else if (type.equals("FUEL_STATION")) {
                         int x = Integer.parseInt(data[1]);
                         int y = Integer.parseInt(data[2]);
@@ -716,6 +721,7 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
                             consensusHoles.remove(pos);
                         } else if (objType.equals("OBSTACLE")) {
                             consensusObstacles.remove(pos);
+                            consensusBlockedGrid[x][y] = false;
                         }
                     }
                 } catch (Exception e) {}
@@ -732,7 +738,13 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
         int threshold = currentStep - this.objectLifetime;
         consensusTiles.entrySet().removeIf(entry -> entry.getValue() <= threshold);
         consensusHoles.entrySet().removeIf(entry -> entry.getValue() <= threshold);
-        consensusObstacles.entrySet().removeIf(entry -> entry.getValue() <= threshold);
+        consensusObstacles.entrySet().removeIf(entry -> {
+            if (entry.getValue() <= threshold) {
+                consensusBlockedGrid[entry.getKey().x][entry.getKey().y] = false;
+                return true;
+            }
+            return false;
+        });
     }
 
     // --- HELPER METHODS ---
@@ -856,7 +868,12 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
     }
 
     public ArrayList<TWEntity> getCreatedObjectsThisStep() { return createdObjectsThisStep; }
-    public boolean isConsensusBlocked(int x, int y) { return consensusObstacles.containsKey(new Int2D(x, y)); }
+
+    public boolean isConsensusBlocked(int x, int y) {
+        if (x < 0 || x >= me.getEnvironment().getxDimension() || y < 0 || y >= me.getEnvironment().getyDimension()) return true;
+        return consensusBlockedGrid[x][y];
+    }
+
     public ArrayList<TWEntity> getNewDiscoveriesThisStep() { return newDiscoveriesThisStep; }
     public int getDiscoveredLifetime() { return discoveredLifetime; }
     public boolean isDiscoveredLifetimeDefinite() { return discoveredLifetimeIsDefinite; }
