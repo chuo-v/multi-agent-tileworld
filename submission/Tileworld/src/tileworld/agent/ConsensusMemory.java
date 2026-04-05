@@ -101,6 +101,16 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
     /** Flag indicating the team has permanently confirmed the exact object lifetime. */
     private boolean definiteLifetimeKnown = false;
 
+    // --- BREADTH-FIRST SEARCH ---
+
+    /** Persistent grid used to track visited cells during Breadth-First Search (BFS). */
+    private int[][] visitedBFS;
+    /** Auto-incrementing identifier for the current BFS execution.
+     * A cell in visitedBFS is considered 'visited' if its value matches this ID,
+     * allowing the grid to be reused infinitely without ever needing to be cleared.
+     */
+    private int currentBfsId = 0;
+
     // --- CONSTRUCTORS ---
 
     /**
@@ -114,6 +124,8 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
         super(moi, schedule, x, y);
         this.me = moi;
         this.schedule = schedule;
+
+        this.visitedBFS = new int[x][y];
 
         this.privateShadow = new TWAgentPercept[x][y]; // Initialize Shadow Layer
         this.lastObservationGrid = new double[x][y];
@@ -391,12 +403,12 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
         int xDim = me.getEnvironment().getxDimension();
         int yDim = me.getEnvironment().getyDimension();
 
-        boolean[][] visitedBFS = new boolean[xDim][yDim];
+        currentBfsId++;
         Queue<Int2D> queue = new LinkedList<>();
 
         Int2D startNode = new Int2D(startX, startY);
         queue.add(startNode);
-        visitedBFS[startX][startY] = true;
+        visitedBFS[startX][startY] = currentBfsId;
 
         // Stores all valid targets found at the exact same travel depth
         List<Int2D> currentLayerCandidates = new ArrayList<>();
@@ -427,10 +439,10 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
                     int nx = current.x + dx[d];
                     int ny = current.y + dy[d];
 
-                    if (nx >= 0 && nx < xDim && ny >= 0 && ny < yDim && !visitedBFS[nx][ny]) {
+                    if (nx >= 0 && nx < xDim && ny >= 0 && ny < yDim && visitedBFS[nx][ny] != currentBfsId) {
                         // Respect obstacles during the search
                         if (!isConsensusBlocked(nx, ny)) {
-                            visitedBFS[nx][ny] = true;
+                            visitedBFS[nx][ny] = currentBfsId;
                             queue.add(new Int2D(nx, ny));
                         }
                     }
