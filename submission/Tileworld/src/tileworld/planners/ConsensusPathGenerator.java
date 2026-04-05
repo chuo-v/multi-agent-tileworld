@@ -120,6 +120,10 @@ public class ConsensusPathGenerator implements TWPathGenerator {
                             neighbour.setParent(current);
                             neighbour.openSearchId = currentSearchId; // Mark as in-queue
 
+                            // If this node was previously closed, we must un-close it
+                            // so it isn't skipped when popped from the queue again!
+                            neighbour.closedSearchId = -1;
+
                             // Add new entry with current best f-score
                             open.add(new SearchEntry(neighbour, neighbour.cost + neighbour.heuristic));
                         }
