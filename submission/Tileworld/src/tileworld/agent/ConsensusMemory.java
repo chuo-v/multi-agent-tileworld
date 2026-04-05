@@ -578,24 +578,23 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
                             double startTime = prevPercept.getT();
                             int calculatedLife = (int) (currentTime - startTime);
 
-                            // Only execute block if value is >= current knowledge
-                            if (calculatedLife >= this.objectLifetime) {
-                                // Only Obstacles provide definite data (Tiles/Holes can be interacted with)
-                                if (witnessedCreationGrid[x][y] && (oldObj instanceof TWObstacle)) {
-                                    System.out.println("Passive Crowdsourcing: " + me.getName() +
-                                        " found DEFINITE lifetime: " + calculatedLife);
+                            // Only Obstacles provide definite data (Tiles/Holes can be interacted with)
+                            if (witnessedCreationGrid[x][y] && (oldObj instanceof TWObstacle)) {
+                                System.out.println("Passive Crowdsourcing: " + me.getName() +
+                                    " found DEFINITE lifetime: " + calculatedLife);
 
-                                    this.updateLifetime(calculatedLife);
-                                    this.discoveredLifetime = calculatedLife;
-                                    this.definiteLifetimeKnown = true;
-                                    this.discoveredLifetimeIsDefinite = true;
+                                // Must forcefully overwrite object lifetime. Do not use updateLifetime()
+                                // because Math.max will ignore the truth if the true life is lower than the guess.
+                                this.objectLifetime = calculatedLife;
+                                this.discoveredLifetime = calculatedLife;
+                                this.definiteLifetimeKnown = true;
+                                this.discoveredLifetimeIsDefinite = true;
 
-                                } else if (calculatedLife > this.objectLifetime) {
-                                    this.updateLifetime(calculatedLife);
-                                    this.discoveredLifetime = calculatedLife;
-                                    System.out.println("Passive Crowdsourcing: " + me.getName() +
-                                        " estimated lifetime >= " + calculatedLife);
-                                }
+                            } else if (calculatedLife > this.objectLifetime) {
+                                this.updateLifetime(calculatedLife);
+                                this.discoveredLifetime = calculatedLife;
+                                System.out.println("Passive Crowdsourcing: " + me.getName() +
+                                    " estimated lifetime >= " + calculatedLife);
                             }
                         }
                         privateShadow[x][y] = null;
@@ -713,7 +712,7 @@ public class ConsensusMemory extends TWAgentWorkingMemory {
                         updateLifetime(Integer.parseInt(data[1]));
                     } else if (type.equals("DEFINITE_LIFETIME")) {
                         int val = Integer.parseInt(data[1]);
-                        updateLifetime(val);
+                        this.objectLifetime = val; // Forceful overwrite to sync with team truth
                         this.definiteLifetimeKnown = true;
                     } else if (type.equals("MONITORING") && senderName != null) {
                         int x = Integer.parseInt(data[1]);
